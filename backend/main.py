@@ -4,8 +4,13 @@ from fastapi import FastAPI, HTTPException, Header, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from supabase import create_client, Client
 from pydantic import BaseModel
-from typing import List, Optional
-from datetime import datetime
+from typing import List, Dict, Any, Optional
+from schemas import (
+    DashboardData, QueueItem, StatusUpdate, CRMEntry, 
+    NotificationRequest, PortalInteraction, ImportRequest, 
+    ClientDetail, DashboardStats
+)
+from datetime import datetime, timedelta
 import requests
 
 # Load env from parent directory if not in current
@@ -38,11 +43,7 @@ supabase: Client = create_client(url, key)
 DEFAULT_TENANT_ID = "a942b959-92f8-4ed1-8397-80ff430d8f1d"
 
 # === MODELS ===
-
-class DashboardData(BaseModel):
-    items: List[dict]
-    kpis: dict
-    exchange_rate: float
+# Moved to schemas.py
 
 # === HELPERS ===
 
@@ -106,6 +107,39 @@ def calculate_debt_split(invoices, rate_uyu):
              upcoming += final_amount
             
     return overdue, upcoming
+
+def calculate_priority_score(client, debt_age_days, debt_amount_norm, has_broken_promise):
+    # 1. Risk Score (40%)
+    risk_map = {
+        'Crítico': 100, 'Legal': 100, 'Incobrable': 100,
+        'Alto': 70, 'Mal Pagador': 70, 'Atraso Frecuente': 70,
+        'Medio': 40, 'Regular': 40,
+        'Bajo': 10, 'Excelente': 10, 'Buen Pagador': 10
+    }
+    risk_val = risk_map.get(client.get('status_riesgo', 'Regular'), 40)
+    score = risk_val * 0.40
+    
+    # 2. Aging Score (30%)
+    # Cap at 360 days for 100 points
+    aging_val = min((debt_age_days / 360) * 100, 100)
+    score += aging_val * 0.30
+    
+    # 3. Amount Score (20%)
+    # 0-100 based on normalized debt. 
+    # For now, we use a simple logarithmic-like cap: > $100k = 100pts
+    amount_val = min((debt_amount_norm / 100000) * 100, 100)
+    score += amount_val * 0.20
+    
+    # 4. Broken Promise Penalty (10% + Extra)
+    if has_broken_promise:
+        score += 50 # Direct penalty
+        
+    return min(int(score), 100) # Cap at 100? Or allow >100? Allow >100 for penalties.
+
+def determine_bucket(score):
+    if score > 80: return 'Urgente'
+    if score >= 50: return 'Seguimiento'
+    return 'Preventivo'
 
 def format_money(amount):
     return f"${amount:,.0f}"
@@ -270,8 +304,111 @@ def get_dashboard_data(tenant_id: str = Depends(get_tenant_from_header)):
         print(f"Error generating dashboard: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-class StatusUpdate(BaseModel):
-    status: str
+# QueueItem moved to schemas.py
+
+@app.get("/api/queue", response_model=List[QueueItem])
+def get_prioritized_queue(
+    min_debt: float = 0,
+    aging_bucket: str = "all", # 1-30, 31-60...
+    risk_level: str = "all",
+    tenant_id: str = Depends(get_tenant_from_header)
+):
+    try:
+        # Fetch Data
+        clients_resp = supabase.table('clientes_maestra').select("*").eq('tenant_id', tenant_id).execute()
+        invoices_resp = supabase.table('inv_docs').select("*").eq('tenant_id', tenant_id).gt('saldo_pendiente', 0).execute()
+        
+        # Recent Broken Promises (Last 7 days)
+        # In a real scenario, we'd query this efficiently. For now, fetch recent CRMs.
+        seven_days_ago = datetime.now() # Logic to subtract 7 days later
+        # Optimization: Fetch only 'Promesa Incumplida' or check statuses logic
+        crm_resp = supabase.table('crm_gestion').select("id_cliente, resultado_estado, fecha_y_hora").eq('tenant_id', tenant_id).execute()
+        
+        clients = clients_resp.data
+        invoices = invoices_resp.data
+        crms = crm_resp.data
+        
+        # Pre-process Invoices by Client
+        inv_map = {}
+        for inv in invoices:
+            rut = inv.get('rut_ci')
+            if rut not in inv_map: inv_map[rut] = []
+            inv_map[rut].append(inv)
+            
+        # Pre-process CRMs for Broken Promises
+        broken_promise_map = {} # client_id -> bool
+        for c in crms:
+            # Check date logic if needed, for now assume all loaded are relevant or filter in query
+            if c.get('resultado_estado') == 'Promesa Incumplida':
+                broken_promise_map[c.get('id_cliente')] = True
+
+        queue = []
+        today = datetime.now().date()
+        rate_uyu = 42.0 # Standardize
+
+        for client in clients:
+            rut = client.get('rut_ci')
+            client_invs = inv_map.get(rut, [])
+            
+            if not client_invs: continue
+            
+            # Calc Debt & Aging
+            total_debt = 0
+            max_days_overdue = 0
+            
+            for inv in client_invs:
+                amt = inv.get('saldo_pendiente', 0)
+                if inv.get('moneda') == 'USD': amt *= rate_uyu
+                total_debt += amt
+                
+                due_str = inv.get('fecha_vencimiento')
+                if due_str:
+                    try:
+                        due = datetime.strptime(due_str, "%Y-%m-%d").date()
+                        days = (today - due).days
+                        if days > max_days_overdue: max_days_overdue = days
+                    except: pass
+            
+            # Apply Filters
+            if total_debt < min_debt: continue
+            
+            if aging_bucket != 'all':
+                if aging_bucket == '1-30' and not (1 <= max_days_overdue <= 30): continue
+                if aging_bucket == '31-60' and not (31 <= max_days_overdue <= 60): continue
+                if aging_bucket == '61-90' and not (61 <= max_days_overdue <= 90): continue
+                if aging_bucket == '+90' and not (max_days_overdue > 90): continue
+                
+            risk = client.get('status_riesgo', 'Regular')
+            if risk_level != 'all' and risk != risk_level: continue
+
+            # Calc Score
+            has_bp = broken_promise_map.get(client.get('uuid'), False)
+            score = calculate_priority_score(client, max_days_overdue, total_debt, has_bp)
+            bucket = determine_bucket(score)
+            
+            queue.append({
+                "id": client.get('uuid'),
+                "rut": rut,
+                "name": client.get('razon_social'),
+                "priorityScore": score,
+                "bucket": bucket,
+                "totalDebt": total_debt,
+                "daysOverdue": max_days_overdue,
+                "risk": risk,
+                "lastAction": "Start", # Placeholder
+                "status": client.get('estado_actual', 'Pendiente')
+            })
+
+        # Sort by Score DESC
+        queue.sort(key=lambda x: x['priorityScore'], reverse=True)
+        
+        return queue
+
+    except Exception as e:
+        print(f"Queue Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# StatusUpdate moved to schemas.py
 
 @app.put("/api/clients/{client_id}/status")
 def update_client_status(client_id: str, update: StatusUpdate, tenant_id: str = Depends(get_tenant_from_header)):
@@ -282,18 +419,7 @@ def update_client_status(client_id: str, update: StatusUpdate, tenant_id: str = 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-class CRMEntry(BaseModel):
-    tenant_id: str = DEFAULT_TENANT_ID
-    id_cliente: str
-    fecha_y_hora: str
-    tipo_gestion: str
-    canal: str
-    sentido: str
-    resultado_estado: str
-    observaciones_mensaje: str
-    fecha_promesa_pago: Optional[str] = None
-    agente_responsable: str = 'Sistema'
-    rut_id_cliente: Optional[str] = None
+# CRMEntry moved to schemas.py
 
 @app.post("/api/crm")
 def create_crm_entry(entry: CRMEntry, tenant_id: str = Depends(get_tenant_from_header)):
@@ -306,10 +432,7 @@ def create_crm_entry(entry: CRMEntry, tenant_id: str = Depends(get_tenant_from_h
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-class NotificationRequest(BaseModel):
-    client_id: str
-    channel: str # email, sms, whatsapp
-    message_val: str # template or message
+# NotificationRequest moved to schemas.py
 
 @app.post("/api/notify")
 def send_notification(req: NotificationRequest):
@@ -389,10 +512,7 @@ def get_portal_data(uuid: str):
         print(f"Portal Fetch Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-class PortalInteraction(BaseModel):
-    uuid: str
-    type: str # 'schedule', 'error', 'payment', 'contact'
-    data: dict # payload specific to type
+# PortalInteraction moved to schemas.py
 
 @app.post("/api/portal/interaction")
 def handle_portal_interaction(interaction: PortalInteraction):
@@ -465,10 +585,7 @@ def handle_portal_interaction(interaction: PortalInteraction):
 
 # === IMPORT PROCESSING ===
 
-class ImportRequest(BaseModel):
-    type: str # 'Facturas', 'Contactos', 'Clientes'
-    data: List[dict]
-    mapping: dict
+# ImportRequest moved to schemas.py
 
 @app.post("/api/import/process")
 def process_import(req: ImportRequest, tenant_id: str = Depends(get_tenant_from_header)):
@@ -613,3 +730,250 @@ def process_import(req: ImportRequest, tenant_id: str = Depends(get_tenant_from_
         raise HTTPException(status_code=500, detail=str(e))
 
 
+
+@app.post("/api/admin/seed")
+def seed_mock_data(tenant_id: str = Depends(get_tenant_from_header)):
+    # 1. Clients
+    clients = [
+        {
+            "rut_ci": "210000010015",
+            "razon_social": "Constructora Acme SA",
+            "status_riesgo": "Crítico",
+            "limite_de_credito": 100000,
+            "estado_actual": "Pendiente",
+            "uuid": "550e8400-e29b-41d4-a716-446655440001",
+            "tenant_id": tenant_id
+        },
+        {
+            "rut_ci": "210000020016",
+            "razon_social": "Logística Rápida SRL",
+            "status_riesgo": "Alto",
+            "limite_de_credito": 50000,
+            "estado_actual": "Pendiente",
+            "uuid": "550e8400-e29b-41d4-a716-446655440002",
+            "tenant_id": tenant_id
+        },
+        {
+            "rut_ci": "210000030017",
+            "razon_social": "Tech Solutions UY",
+            "status_riesgo": "Medio",
+            "limite_de_credito": 25000,
+            "estado_actual": "Comercial",
+            "uuid": "550e8400-e29b-41d4-a716-446655440003",
+            "tenant_id": tenant_id
+        },
+        {
+            "rut_ci": "210000040018",
+            "razon_social": "Panadería El Sol",
+            "status_riesgo": "Bajo",
+            "limite_de_credito": 10000,
+            "estado_actual": "Pendiente",
+            "uuid": "550e8400-e29b-41d4-a716-446655440004",
+            "tenant_id": tenant_id
+        }
+    ]
+
+    for c in clients:
+        try:
+            supabase.table('clientes_maestra').upsert(c).execute()
+        except Exception as e:
+            print(f"Client error {c['razon_social']}: {e}")
+
+    # 2. Invoices
+    today = datetime.now()
+    
+    invoices = [
+        # Acme (Critical, Very Old Debt)
+        {"client_rut": "210000010015", "amount": 150000, "days_ago": 120, "currency": "UYU"},
+        {"client_rut": "210000010015", "amount": 5000, "days_ago": 90, "currency": "USD"},
+        # Logistica (High, Old, Broken Promise likely)
+        {"client_rut": "210000020016", "amount": 45000, "days_ago": 45, "currency": "UYU"},
+        # Tech (Medium, Recent)
+        {"client_rut": "210000030017", "amount": 20000, "days_ago": 15, "currency": "UYU"},
+        # Panaderia (Low, New)
+        {"client_rut": "210000040018", "amount": 5000, "days_ago": 5, "currency": "UYU"}
+    ]
+    
+    for i, inv in enumerate(invoices):
+        due_date = (today - timedelta(days=inv['days_ago'])).strftime("%Y-%m-%d")
+        id_interno = f"MOCK-{i+1000}"
+        
+        data = {
+            "tenant_id": tenant_id,
+            "rut_ci": inv['client_rut'],
+            "id_interno": id_interno,
+            # "nro_doc": str(i+1000), 
+            "serie_numero": "A",
+            "monto_total": inv['amount'],
+            "saldo_pendiente": inv['amount'], 
+            "moneda": inv['currency'],
+            "fecha_vencimiento": due_date,
+            "fecha_emision": (datetime.strptime(due_date, "%Y-%m-%d") - timedelta(days=30)).strftime("%Y-%m-%d"),
+            "estado": "Pendiente"
+        }
+        try:
+            supabase.table('inv_docs').upsert(data, on_conflict="id_interno,tenant_id").execute()
+        except Exception as e:
+            print(f"Inv error: {e}")
+
+    # 3. CRM
+    crm_entry = {
+        "tenant_id": tenant_id,
+        "id_cliente": "550e8400-e29b-41d4-a716-446655440002", 
+        "rut_id_cliente": "210000020016",
+        "tipo_gestion": "Llamada Saliente",
+        "canal": "Teléfono",
+        "sentido": "Saliente",
+        "resultado_estado": "Promesa Incumplida",
+        "observaciones_mensaje": "Prometió pagar hace 7 días y no cumplió. MOCK.",
+        "fecha_y_hora": (today - timedelta(days=2)).isoformat(),
+        "agente_responsable": "Sistema"
+    }
+    
+    try:
+        supabase.table('crm_gestion').insert(crm_entry).execute()
+    except Exception as e:
+        print(f"CRM error: {e}")
+
+    return {"status": "seeded"}
+
+# ClientDetail moved to schemas.py
+
+# DashboardStats moved to schemas.py
+
+@app.get("/api/dashboard/stats", response_model=DashboardStats)
+def get_dashboard_stats(tenant_id: str = Depends(get_tenant_from_header)):
+    try:
+        today = datetime.now().strftime("%Y-%m-%d")
+        
+        # 1. Cash Flow (Recaudado Hoy)
+        payments_res = supabase.table('pagos_reportados').select('monto_transaccion, client_id').eq('fecha_pago', today).eq('tenant_id', tenant_id).execute()
+        cash_flow = sum(p['monto_transaccion'] for p in payments_res.data)
+        
+        # Get last 5 clients who paid
+        recent_payments = supabase.table('pagos_reportados').select('client_id, monto_transaccion, clientes_maestra(razon_social)').eq('fecha_pago', today).eq('tenant_id', tenant_id).limit(5).execute()
+        cash_clients = []
+        for p in recent_payments.data:
+             name = p.get('clientes_maestra', {}).get('razon_social', 'Cliente') if p.get('clientes_maestra') else 'Cliente'
+             cash_clients.append({"name": name, "amount": p['monto_transaccion']})
+
+        # 2. Commitments (Promesas Hoy)
+        # Note: crm_gestion stores dates as ISO timestamps usually? seed used YYYY-MM-DD for promise.
+        # Check if type is Promesa de Pago
+        promises_res = supabase.table('crm_gestion').select('id, resultado_estado').eq('tipo_gestion', 'Promesa de Pago').eq('fecha_promesa_pago', today).eq('tenant_id', tenant_id).execute()
+        commitments_total = len(promises_res.data)
+        commitments_completed = len([p for p in promises_res.data if p.get('resultado_estado') == 'Cumplida']) # Assuming logic
+
+        # 3. Critical Risk 
+        # Count critical clients (Fetch all checks and filter in python to be safe with encoding)
+        print(f"Stats check - Tenant: {tenant_id}")
+        risk_res = supabase.table('clientes_maestra').select('status_riesgo').eq('tenant_id', tenant_id).execute()
+        critical_risk = 0
+        for r in risk_res.data:
+            if r.get('status_riesgo') == 'Crítico' or r.get('status_riesgo') == 'Critico':
+                critical_risk += 1
+        print(f"Risk count Python: {critical_risk}")
+
+        # 4. Operational Volume (Approximation)
+        # Count all clients - Clients touched in last 48h
+        # Ideally this is a specific SQL query, but for now we'll just count clients with 'Pending' conceptual status
+        # Let's simple use: Count of clients in queue that are NOT updated recently?
+        # Simpler: Just count total clients for now or clients with 'Regular' risk as 'Pending'?
+        # User asked: Last action > 48h.
+        two_days_ago = (datetime.now() - timedelta(days=2)).isoformat()
+        
+        # Fetch all clients IDs
+        all_clients = supabase.table('clientes_maestra').select('uuid').eq('tenant_id', tenant_id).execute()
+        total_clients = len(all_clients.data)
+        
+        # Fetch clients with CRM in last 48h
+        recent_crm = supabase.table('crm_gestion').select('id_cliente').eq('tenant_id', tenant_id).gte('fecha_y_hora', two_days_ago).execute()
+        touched_ids = set(c['id_cliente'] for c in recent_crm.data)
+        
+        operational_volume = max(0, total_clients - len(touched_ids))
+
+        return {
+            "cashFlow": cash_flow,
+            "cashFlowClients": cash_clients,
+            "operationalVolume": operational_volume,
+            "commitmentsToday": commitments_total,
+            "commitmentsCompleted": commitments_completed,
+            "criticalRisk": critical_risk
+        }
+    except Exception as e:
+        print(f"Error stats: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/clients/{client_id}", response_model=ClientDetail)
+def get_client_detail(client_id: str, tenant_id: str = Depends(get_tenant_from_header)):
+    try:
+        # 1. Fetch Client
+        try:
+            client_resp = supabase.table('clientes_maestra').select("*").eq('uuid', client_id).eq('tenant_id', tenant_id).single().execute()
+            client = client_resp.data
+        except:
+             raise HTTPException(status_code=404, detail="Client not found")
+
+        # 2. Fetch Invoices
+        rut = client.get('rut_ci')
+        invoices_resp = supabase.table('inv_docs').select("*").eq('rut_ci', rut).eq('tenant_id', tenant_id).gt('saldo_pendiente', 0).execute()
+        invoices = invoices_resp.data
+
+        # 3. Fetch CRM
+        crm_resp = supabase.table('crm_gestion').select("*").eq('id_cliente', client_id).eq('tenant_id', tenant_id).order('fecha_y_hora', desc=True).execute()
+        crms = crm_resp.data
+
+        # 4. Calculate Debt
+        # Use existing logic logic if possible, or replicate
+        rate_uyu = 42.0 
+        overdue_sum = 0
+        upcoming_sum = 0
+        
+        mapped_invoices = []
+        today = datetime.now().date()
+
+        for inv in invoices:
+            amount = inv.get('saldo_pendiente', 0)
+            currency = inv.get('moneda', 'UYU')
+            due_str = inv.get('fecha_vencimiento')
+            final_amount = amount if currency == 'UYU' else amount * rate_uyu
+            
+            # Map for frontend
+            mapped_inv = {
+                "id": inv.get('id_interno'),
+                "issueDate": inv.get('fecha_emision'),
+                "dueDate": inv.get('fecha_vencimiento'),
+                "amount": amount,
+                "currency": currency,
+                "status": inv.get('estado')
+            }
+            mapped_invoices.append(mapped_inv)
+            
+            if due_str:
+                try:
+                    due = datetime.strptime(due_str, "%Y-%m-%d").date()
+                    if due < today:
+                        overdue_sum += final_amount
+                    else:
+                        upcoming_sum += final_amount
+                except:
+                     upcoming_sum += final_amount
+            else:
+                 upcoming_sum += final_amount
+
+        return {
+            "id": client.get('uuid'),
+            "rut": client.get('rut_ci'),
+            "name": client.get('razon_social'),
+            "risk": client.get('status_riesgo'),
+            "totalDebt": overdue_sum + upcoming_sum,
+            "overdue": overdue_sum,
+            "upcoming": upcoming_sum,
+            "agentName": "Sin Asignar", # Placeholder or fetch from relation
+            "invoices": mapped_invoices,
+            "crmHistory": crms
+        }
+
+    except Exception as e:
+        print(f"Error fetching client detail: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

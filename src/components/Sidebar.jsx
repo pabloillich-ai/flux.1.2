@@ -19,6 +19,7 @@ import clsx from 'clsx';
 
 const navItems = [
     { icon: LayoutDashboard, label: 'Inicio', path: '/dashboard' },
+    { icon: Zap, label: 'Sala de Comando', path: '/context-role' },
     { icon: Zap, label: 'Dashboard', path: '/agent-dashboard' },
     {
         icon: CreditCard,

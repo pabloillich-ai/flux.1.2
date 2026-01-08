@@ -29,3 +29,24 @@ dist-ssr
 
 # Archived
 __archived_files/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+env/
+.env
+
+# Large Files / Docs
+*.docx
+*.zip
+*.pdf
+
+# Mock Data (if not intended for repo)
+# mock_*.csv
+# For now keeping mock data as it seems useful for the project demo.
+
+# System
+Thumbs.db

@@ -24,6 +24,7 @@ import Clients from './pages/Clientes';
 import ClientPortal from './pages/ClientPortal';
 import RexLanding from './pages/RexLanding';
 import CollectionWorkflows from './pages/CollectionWorkflows';
+import ContextAndRole from './pages/ContextAndRole';
 
 function App() {
   return (
@@ -52,6 +53,7 @@ function App() {
             <Route path="clients" element={<Clients />} />
             <Route path="contacts" element={<Contactos />} />
             <Route path="workflows" element={<CollectionWorkflows />} />
+            <Route path="context-role" element={<ContextAndRole />} />
             <Route path="alerts" element={<div className="p-10">Alertas</div>} />
             <Route path="import" element={<DataImportWizard />} />
           </Route>

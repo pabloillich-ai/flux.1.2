@@ -84,7 +84,7 @@ export default function ClientPortal() {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        uuid: client.custom_uuid, // Using custom_uuid as the key
+                        uuid: client.uuid, // Using custom_uuid as the key
                         type: 'schedule',
                         data: { date, amount: parsedAmount, comment }
                     })
@@ -115,7 +115,7 @@ export default function ClientPortal() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    uuid: client.custom_uuid,
+                    uuid: client.uuid,
                     type: 'error',
                     data: { comment: errorComment }
                 })
@@ -189,7 +189,7 @@ export default function ClientPortal() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    uuid: client.custom_uuid,
+                    uuid: client.uuid,
                     type: 'payment',
                     data: { comment, fileUrl }
                 })
@@ -224,7 +224,7 @@ export default function ClientPortal() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    uuid: client.custom_uuid,
+                    uuid: client.uuid,
                     type: 'contact',
                     data: { name, phone, comment }
                 })

@@ -216,11 +216,11 @@ export default function ClientsPage() {
     };
 
     const handleCopyPortalLink = (client) => {
-        if (!client.custom_uuid) {
+        if (!client.uuid) {
             alert('Este cliente no tiene un UUID generado. Asegúrese de ejecutar las migraciones.');
             return;
         }
-        const link = `${window.location.origin}/portal/${client.custom_uuid}`;
+        const link = `${window.location.origin}/portal/${client.uuid}`;
         navigator.clipboard.writeText(link).then(() => {
             alert('✅ Enlace de portal copiado: ' + link);
         });

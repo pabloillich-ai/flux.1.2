@@ -1,0 +1,6 @@
+@echo off
+echo Starting Backend...
+start "Backend API" cmd /k "cd backend && venv\Scripts\activate && uvicorn main:app --reload --port 8000"
+echo Starting Frontend...
+start "Frontend App" cmd /k "npm run dev"
+echo Servers started!
