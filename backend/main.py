@@ -8,10 +8,12 @@ from typing import List, Dict, Any, Optional
 from schemas import (
     DashboardData, QueueItem, StatusUpdate, CRMEntry, 
     NotificationRequest, PortalInteraction, ImportRequest, 
-    ClientDetail, DashboardStats
+    ClientDetail, DashboardStats, ReportedPaymentUpdate
 )
 from datetime import datetime, timedelta
 import requests
+from utils import get_current_uyu_rate
+import resend
 
 # Load env from parent directory if not in current
 load_dotenv(dotenv_path="../.env")
@@ -19,10 +21,18 @@ load_dotenv() # Fallback to current
 
 app = FastAPI(title="CobranzasPro Backend")
 
-# CORS - Allow strict origins in prod, but * for local dev
+# CORS - Dynamic Config
+cors_env = os.getenv("CORS_ORIGINS")
+if cors_env:
+    origins = [origin.strip() for origin in cors_env.split(",")]
+else:
+    # Fallback: Allow all for troubleshooting if env var not set
+    print("WARNING: CORS_ORIGINS not set, allowing all origins (*)")
+    origins = ["*"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -32,6 +42,10 @@ app.add_middleware(
 url: str = os.getenv("VITE_SUPABASE_URL")
 # PREFER SERVICE_ROLE_KEY for Backend to bypass RLS!
 key: str = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("VITE_SUPABASE_ANON_KEY")
+
+# Resend Setup
+resend.api_key = os.getenv("RESEND_API_KEY")
+
 
 if not url or not key:
     print("WARNING: Supabase URL or Key not found in environment variables.")
@@ -153,15 +167,8 @@ def health_check():
 @app.get("/dashboard", response_model=DashboardData)
 def get_dashboard_data(tenant_id: str = Depends(get_tenant_from_header)):
     try:
-        # 1. Get Exchange Rate (Cached or Live)
-        rate_uyu = 42.0
-        try:
-            resp = requests.get('https://open.er-api.com/v6/latest/USD', timeout=2)
-            if resp.status_code == 200:
-                data = resp.json()
-                rate_uyu = data['rates']['UYU']
-        except Exception as e:
-            print(f"Rate fetch failed, using default: {e}")
+        # 1. Get Exchange Rate (Scraped from BROU)
+        rate_uyu = get_current_uyu_rate()
 
         # 2. Fetch Data (Scoped to Dynamic Tenant)
         print(f"Fetching Dashboard for Tenant: {tenant_id}")
@@ -299,9 +306,26 @@ def get_dashboard_data(tenant_id: str = Depends(get_tenant_from_header)):
             "kpis": kpis,
             "exchange_rate": rate_uyu
         }
-
     except Exception as e:
         print(f"Error generating dashboard: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/crm/interactions")
+def add_crm_interaction(entry: CRMEntry, tenant_id: str = Depends(get_tenant_from_header)):
+    try:
+        # Enforce Tenant Security
+        data = entry.dict()
+        data['tenant_id'] = tenant_id 
+        
+        # If no client ID provided (global action?), might error, but assuming frontend sends it.
+        # If 'rut_id_cliente' is sent, we might want to ensure 'id_cliente' is filled or vice versa
+        # For now, trust the payload tailored by frontend custom for this table.
+
+        res = supabase.table('crm_gestion').insert(data).execute()
+        
+        return {"status": "success", "data": res.data}
+    except Exception as e:
+        print(f"Error adding CRM entry: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # QueueItem moved to schemas.py
@@ -344,7 +368,7 @@ def get_prioritized_queue(
 
         queue = []
         today = datetime.now().date()
-        rate_uyu = 42.0 # Standardize
+        rate_uyu = get_current_uyu_rate()
 
         for client in clients:
             rut = client.get('rut_ci')
@@ -438,7 +462,43 @@ def create_crm_entry(entry: CRMEntry, tenant_id: str = Depends(get_tenant_from_h
 def send_notification(req: NotificationRequest):
     # Placeholder for Email/SMS integration
     print(f"Sending {req.channel} to {req.client_id}: {req.message_val}")
-    return {"status": "queued", "message": "Notification dispatched"}
+    
+    if req.channel.lower() == 'email':
+        if not resend.api_key:
+             print("Resend API Key not set. Skipping email.")
+             return {"status": "error", "message": "Resend API Key missing"}
+
+        # 1. Fetch Client Email
+        # Try finding client in clientes_maestra (email_facturacion) or profiles?
+        # Assuming client_id is a UUID from clients table
+        try:
+            client_resp = supabase.table('clientes_maestra').select('email_facturacion, razon_social').eq('uuid', req.client_id).single().execute()
+            if client_resp.data:
+                dest_email = client_resp.data.get('email_facturacion')
+                client_name = client_resp.data.get('razon_social')
+                
+                if not dest_email or '@' not in dest_email:
+                     # Try Contacts?
+                     # For now, just error
+                     return {"status": "error", "message": "Client has no valid email"}
+                
+                # 2. Send Email
+                r = resend.Emails.send({
+                  "from": "CobranzasPro <onboarding@resend.dev>", # Default Test Sender
+                  "to": dest_email,
+                  "subject": "Notificación de Cobranza",
+                  "html": f"<p>Estimado {client_name},</p><p>{req.message_val}</p>"
+                })
+                print(f"Resend Response: {r}")
+                return {"status": "sent", "provider_response": r}
+            else:
+                 return {"status": "error", "message": "Client not found"}
+
+        except Exception as e:
+            print(f"Email Error: {e}")
+            return {"status": "error", "detail": str(e)}
+
+    return {"status": "queued", "message": "Notification dispatched (Simulated for non-email)"}
 
 @app.post("/api/admin/run-daily-process")
 def run_daily_process():
@@ -456,7 +516,7 @@ def run_daily_process():
         updated_count = 0
         
         # Example Logic: Mark as 'Critical' if debt > $100,000 UYU equivalent
-        rate_uyu = 42.0 
+        rate_uyu = get_current_uyu_rate() 
         
         for client in clients:
             # Calculate debt (simplified)
@@ -553,13 +613,30 @@ def handle_portal_interaction(interaction: PortalInteraction):
         elif interaction.type == 'payment':
             new_entry["resultado_estado"] = "Pago Realizado"
             comment = payload.get('comment', '')
-            file_url = payload.get('fileUrl', '') # If handled by frontend upload first, or we can handle upload here too?
-            # Ideally frontend uploads to storage and sends URL here to keep backend simple for now or use specific upload endpoint.
-            # Assuming frontend handles upload and sends URL.
+            file_url = payload.get('fileUrl', '')
+            amount = payload.get('amount', 0)
+            
             msg = comment
             if file_url:
                 msg += f" [Comprobante: {file_url}]"
             new_entry["observaciones_mensaje"] = msg
+
+            # Create entry in pagos_reportados for dashboard tracking
+            payment_record = {
+                "tenant_id": client.get('tenant_id', DEFAULT_TENANT_ID),
+                "client_id": interaction.uuid,
+                "monto_transaccion": amount,
+                "fecha_pago": datetime.now().strftime("%Y-%m-%d"),
+                "estado": "Pendiente de Validación",
+                "observacion": msg,
+                "comprobante_url": file_url
+            }
+            try:
+                supabase.table('pagos_reportados').insert(payment_record).execute()
+            except Exception as e:
+                print(f"Error inserting into pagos_reportados: {e}")
+                # We don't fail the whole interaction if this secondary log fails, 
+                # but in production we might want more robust handling.
 
         elif interaction.type == 'contact':
             new_entry["resultado_estado"] = "Solicitud de Contacto"
@@ -925,7 +1002,7 @@ def get_client_detail(client_id: str, tenant_id: str = Depends(get_tenant_from_h
 
         # 4. Calculate Debt
         # Use existing logic logic if possible, or replicate
-        rate_uyu = 42.0 
+        rate_uyu = get_current_uyu_rate() 
         overdue_sum = 0
         upcoming_sum = 0
         
@@ -976,4 +1053,27 @@ def get_client_detail(client_id: str, tenant_id: str = Depends(get_tenant_from_h
 
     except Exception as e:
         print(f"Error fetching client detail: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# === REPORTED PAYMENTS ENDPOINTS ===
+
+@app.get("/api/payments/reported")
+def get_reported_payments(tenant_id: str = Depends(get_tenant_from_header)):
+    try:
+        # Fetch all reported payments for tenant
+        # Join with clientes_maestra to get client name
+        res = supabase.table('pagos_reportados').select('*, clientes_maestra(razon_social, rut_ci)').eq('tenant_id', tenant_id).order('created_at', desc=True).execute()
+        return res.data
+    except Exception as e:
+        print(f"Error fetching payments: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.put("/api/payments/reported/{payment_id}")
+def update_reported_payment(payment_id: str, update: ReportedPaymentUpdate, tenant_id: str = Depends(get_tenant_from_header)):
+    try:
+        data = update.dict(exclude_unset=True)
+        res = supabase.table('pagos_reportados').update(data).eq('id', payment_id).eq('tenant_id', tenant_id).execute()
+        return {"status": "success", "data": res.data[0] if res.data else {}}
+    except Exception as e:
+        print(f"Error updating payment: {e}")
         raise HTTPException(status_code=500, detail=str(e))

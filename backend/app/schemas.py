@@ -114,12 +114,6 @@ class ClientDetail(BaseModel):
 class StatusUpdate(BaseModel):
     status: str
 
-class ReportedPaymentUpdate(BaseModel):
-    monto_transaccion: Optional[float] = None
-    estado: Optional[str] = None
-    observacion: Optional[str] = None
-    fecha_pago: Optional[str] = None
-
 # === CRM & PORTAL SCHEMAS ===
 
 class CRMEntry(BaseModel):

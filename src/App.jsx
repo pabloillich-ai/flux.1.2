@@ -18,6 +18,7 @@ import Agenda from './pages/Agenda';
 import Contactos from './pages/Contactos';
 
 import DataImportWizard from './pages/DataImportWizard';
+import GestionCartera from './pages/GestionCartera';
 
 // Placeholder Pages (Temporary)
 import Clients from './pages/Clientes';
@@ -25,6 +26,7 @@ import ClientPortal from './pages/ClientPortal';
 import RexLanding from './pages/RexLanding';
 import CollectionWorkflows from './pages/CollectionWorkflows';
 import ContextAndRole from './pages/ContextAndRole';
+import ReportedPayments from './pages/ReportedPayments';
 
 function App() {
   return (
@@ -56,6 +58,8 @@ function App() {
             <Route path="context-role" element={<ContextAndRole />} />
             <Route path="alerts" element={<div className="p-10">Alertas</div>} />
             <Route path="import" element={<DataImportWizard />} />
+            <Route path="gestion-cartera" element={<GestionCartera />} />
+            <Route path="reported-payments" element={<ReportedPayments />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />
