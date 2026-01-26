@@ -14,9 +14,10 @@ import {
 } from 'lucide-react';
 import clsx from 'clsx';
 
+import { API_URL } from '../config';
+
 export default function ClientPortal() {
     const { clientId } = useParams();
-    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
     const [client, setClient] = useState(null);
     const [invoices, setInvoices] = useState([]);
@@ -41,7 +42,12 @@ export default function ClientPortal() {
 
             const data = await res.json();
             setClient(data.client);
-            setInvoices(data.invoices || []);
+            // Assign uniqueKey to handle duplicate IDs from backend
+            const processedInvoices = (data.invoices || []).map((inv, idx) => ({
+                ...inv,
+                uniqueKey: `${inv.id}_${idx}`
+            }));
+            setInvoices(processedInvoices);
 
         } catch (err) {
             console.error("Portal Error:", err);
@@ -137,6 +143,43 @@ export default function ClientPortal() {
     const [showPaymentModal, setShowPaymentModal] = useState(false);
     const [paymentComment, setPaymentComment] = useState('');
     const [paymentFile, setPaymentFile] = useState(null);
+    const [selectedInvoices, setSelectedInvoices] = useState(new Set());
+    const [reportedAmount, setReportedAmount] = useState('');
+
+    const toggleSelectAll = () => {
+        if (selectedInvoices.size === invoices.length) {
+            setSelectedInvoices(new Set());
+            setReportedAmount('');
+        } else {
+            const allKeys = new Set(invoices.map(i => i.uniqueKey));
+            setSelectedInvoices(allKeys);
+            const newTotal = invoices.reduce((sum, inv) => sum + (inv.saldo_pendiente || 0), 0);
+            setReportedAmount(newTotal.toString());
+        }
+    };
+
+    const toggleInvoiceSelection = (uniqueKey) => {
+        const newSet = new Set(selectedInvoices);
+        if (newSet.has(uniqueKey)) {
+            newSet.delete(uniqueKey);
+        } else {
+            newSet.add(uniqueKey);
+        }
+        setSelectedInvoices(newSet);
+
+        // Auto-sum logic
+        const newTotal = invoices
+            .filter(inv => newSet.has(inv.uniqueKey))
+            .reduce((sum, inv) => sum + (inv.saldo_pendiente || 0), 0);
+
+        setReportedAmount(newTotal > 0 ? newTotal.toString() : '');
+    };
+
+    const getSelectedTotal = () => {
+        return invoices
+            .filter(inv => selectedInvoices.has(inv.uniqueKey))
+            .reduce((sum, inv) => sum + (inv.saldo_pendiente || 0), 0);
+    };
 
     const handleFileChange = (e) => {
         const file = e.target.files[0];
@@ -152,6 +195,29 @@ export default function ClientPortal() {
     const handlePaymentReport = async () => {
         try {
             const comment = paymentComment.trim();
+            const amountVal = parseFloat(reportedAmount);
+            const selectedTotal = getSelectedTotal();
+
+            if (isNaN(amountVal) || amountVal <= 0) {
+                alert("Por favor ingrese un monto válido.");
+                return;
+            }
+
+            if (selectedInvoices.size === 0) {
+                alert("Por favor seleccione al menos una factura que está pagando.");
+                return;
+            }
+
+            // Validation Logic
+            if (Math.abs(amountVal - selectedTotal) > 1.0) { // Allow $1 difference for rounding
+                const diff = amountVal - selectedTotal;
+                const msg = diff > 0
+                    ? `El monto ingresado es mayor al total seleccionado por $${diff.toLocaleString()}. ¿Desea continuar?`
+                    : `El monto ingresado es menor al total seleccionado por $${Math.abs(diff).toLocaleString()}. ¿Desea continuar?`;
+
+                if (!window.confirm(msg)) return;
+            }
+
             let fileUrl = '';
             let fileMsg = '';
 
@@ -178,11 +244,12 @@ export default function ClientPortal() {
                 fileMsg = ` [Comprobante: ${fileUrl}]`;
             }
 
-            const fullObservation = `${comment}${fileMsg}`;
-            if (!fullObservation.trim()) {
-                alert("Por favor agregue un comentario o adjunte un comprobante.");
-                return;
-            }
+            const invoiceRefs = Array.from(selectedInvoices)
+                .map(key => invoices.find(i => i.uniqueKey === key)?.id)
+                .filter(Boolean)
+                .join(', ');
+
+            const fullObservation = `${comment} (Facturas: ${invoiceRefs})${fileMsg}`;
 
             // Backend Call
             const res = await fetch(`${API_URL}/api/portal/interaction`, {
@@ -191,7 +258,12 @@ export default function ClientPortal() {
                 body: JSON.stringify({
                     uuid: client.uuid,
                     type: 'payment',
-                    data: { comment, fileUrl }
+                    data: {
+                        comment: fullObservation,
+                        fileUrl,
+                        amount: amountVal,
+                        invoices: Array.from(selectedInvoices).map(key => invoices.find(i => i.uniqueKey === key)?.id).filter(Boolean)
+                    }
                 })
             });
 
@@ -200,6 +272,8 @@ export default function ClientPortal() {
 
             alert("Información de pago enviada exitosamente. Gracias.");
             setPaymentComment('');
+            setReportedAmount('');
+            setSelectedInvoices(new Set());
             setPaymentFile(null);
             setShowPaymentModal(false);
 
@@ -507,52 +581,177 @@ export default function ClientPortal() {
                         {/* Payment Report Button (Ya Pagué) */}
                         <div className="relative">
                             {showPaymentModal && (
-                                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" style={{ margin: 0 }}>
-                                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
-                                        <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-                                            <h3 className="font-bold text-slate-800">Informar Pago</h3>
-                                            <button onClick={() => setShowPaymentModal(false)} className="p-1 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition">
-                                                <AlertTriangle className="rotate-45" size={20} style={{ transform: 'rotate(45deg)' }} />
+                                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" style={{ margin: 0 }}>
+                                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl h-[85vh] overflow-hidden flex flex-col animate-in fade-in zoom-in duration-200">
+                                        {/* Header */}
+                                        <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 flex-none">
+                                            <div>
+                                                <h3 className="text-lg font-black text-slate-800 flex items-center gap-2">
+                                                    <CreditCard className="text-green-600" size={20} />
+                                                    Informar Pago Realizado
+                                                </h3>
+                                                <p className="text-sm text-slate-500 font-medium">Selecciona las facturas y adjunta tu comprobante</p>
+                                            </div>
+                                            <button onClick={() => setShowPaymentModal(false)} className="p-2 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-all">
+                                                <AlertTriangle className="rotate-45" size={24} style={{ transform: 'rotate(45deg)' }} />
                                             </button>
                                         </div>
-                                        <div className="p-6">
-                                            <div className="space-y-4">
-                                                <div className="p-4 bg-green-50 rounded-lg border border-green-100 flex gap-3 text-green-800 text-sm">
-                                                    <CheckCircle className="shrink-0" size={20} />
-                                                    <p>Si ya realizaste el pago, por favor infórmalo aquí adjuntando el comprobante si lo tienes.</p>
+
+                                        {/* Content - 2 Columns */}
+                                        <div className="flex-1 overflow-hidden grid grid-cols-1 lg:grid-cols-3 divide-y lg:divide-y-0 lg:divide-x divide-slate-100">
+
+                                            {/* Left: Invoice Selection (Wider) */}
+                                            <div className="lg:col-span-2 flex flex-col h-full overflow-hidden bg-slate-50/30">
+                                                <div className="p-4 flex-none flex justify-between items-center border-b border-slate-100 bg-white">
+                                                    <h4 className="font-bold text-slate-700 text-sm uppercase tracking-wide">Documentos Disponibles</h4>
+                                                    <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold">
+                                                        {selectedInvoices.size} facturas seleccionadas
+                                                    </span>
                                                 </div>
-                                                <div className="space-y-2">
-                                                    <label className="block text-xs font-bold text-slate-500 uppercase">Comentarios</label>
-                                                    <textarea
-                                                        className="w-full h-24 p-3 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700 resize-none focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all"
-                                                        value={paymentComment}
-                                                        onChange={(e) => setPaymentComment(e.target.value)}
-                                                    />
-                                                </div>
-                                                <div className="space-y-2">
-                                                    <label className="block text-xs font-bold text-slate-500 uppercase">Adjuntar Comprobante (Máx 12MB)</label>
-                                                    <div className="relative">
-                                                        <input
-                                                            type="file"
-                                                            onChange={handleFileChange}
-                                                            className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100 cursor-pointer border border-slate-200 rounded-lg"
-                                                            accept="image/*,application/pdf"
-                                                        />
-                                                        {paymentFile && (
-                                                            <div className="mt-1 text-xs text-green-600 font-bold flex items-center gap-1">
-                                                                <CheckCircle size={12} />
-                                                                {paymentFile.name} ({(paymentFile.size / 1024 / 1024).toFixed(2)} MB)
-                                                            </div>
-                                                        )}
+
+                                                <div className="flex-1 overflow-y-auto p-4">
+                                                    <div className="border border-slate-200 rounded-xl bg-white shadow-sm overflow-hidden">
+                                                        <table className="w-full text-left text-sm">
+                                                            <thead className="bg-slate-50 text-xs font-bold text-slate-500 uppercase sticky top-0 z-10 shadow-sm">
+                                                                <tr>
+                                                                    <th className="p-4 w-12 text-center cursor-pointer hover:bg-slate-100 transition-colors" onClick={toggleSelectAll}>
+                                                                        <div className={`w-5 h-5 rounded border-2 mx-auto flex items-center justify-center transition-all ${selectedInvoices.size > 0 && selectedInvoices.size === invoices.length
+                                                                            ? 'bg-green-600 border-green-600 text-white'
+                                                                            : 'border-slate-300'
+                                                                            }`}>
+                                                                            {selectedInvoices.size > 0 && selectedInvoices.size === invoices.length && <CheckCircle size={12} strokeWidth={4} />}
+                                                                        </div>
+                                                                    </th>
+                                                                    <th className="p-4">Detalle Factura</th>
+                                                                    <th className="p-4 text-center">Vencimiento</th>
+                                                                    <th className="p-4 text-right">Saldo</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody className="divide-y divide-slate-100">
+                                                                {invoices.map(inv => {
+                                                                    const isSelected = selectedInvoices.has(inv.uniqueKey);
+                                                                    return (
+                                                                        <tr
+                                                                            key={inv.uniqueKey}
+                                                                            onClick={() => toggleInvoiceSelection(inv.uniqueKey)}
+                                                                            className={`cursor-pointer transition-all duration-200 group ${isSelected
+                                                                                    ? 'bg-green-50/60'
+                                                                                    : 'hover:bg-slate-50'
+                                                                                }`}
+                                                                        >
+                                                                            <td className="p-4 text-center">
+                                                                                <input
+                                                                                    type="checkbox"
+                                                                                    checked={isSelected}
+                                                                                    readOnly
+                                                                                    className="w-5 h-5 rounded border-slate-300 text-green-600 focus:ring-green-500 cursor-pointer pointer-events-none"
+                                                                                />
+                                                                            </td>
+                                                                            <td className="p-4">
+                                                                                <div className={`font-bold mb-0.5 ${isSelected ? 'text-green-900' : 'text-slate-800'}`}>
+                                                                                    {inv.doc_type || 'Factura'} #{inv.id}
+                                                                                </div>
+                                                                                <div className="text-xs text-slate-400 font-mono">Emillón: {inv.fecha_emision}</div>
+                                                                            </td>
+                                                                            <td className="p-4 text-center">
+                                                                                <span className={`text-xs font-bold px-2 py-1 rounded ${new Date(inv.fecha_vencimiento) < new Date() ? 'bg-red-100 text-red-700' : 'bg-blue-50 text-blue-700'
+                                                                                    }`}>
+                                                                                    {inv.fecha_vencimiento}
+                                                                                </span>
+                                                                            </td>
+                                                                            <td className="p-4 text-right">
+                                                                                <div className={`font-mono font-bold text-base ${isSelected ? 'text-green-700' : 'text-slate-600'}`}>
+                                                                                    {inv.currency} {inv.saldo_pendiente.toLocaleString()}
+                                                                                </div>
+                                                                            </td>
+                                                                        </tr>
+                                                                    );
+                                                                })}
+                                                            </tbody>
+                                                        </table>
                                                     </div>
                                                 </div>
-                                                <button
-                                                    onClick={handlePaymentReport}
-                                                    disabled={!paymentComment.trim() && !paymentFile}
-                                                    className="w-full py-3 bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl font-bold shadow-lg shadow-green-600/20 transition-all active:scale-[0.98]"
-                                                >
-                                                    Informar Pago
-                                                </button>
+                                            </div>
+
+                                            {/* Right: Payment Details (Fixed Panel) */}
+                                            <div className="lg:col-span-1 bg-white p-6 flex flex-col h-full overflow-y-auto">
+                                                <h4 className="font-bold text-slate-800 mb-6 uppercase text-xs tracking-wider border-b border-slate-100 pb-2">Detalles del Pago</h4>
+
+                                                <div className="space-y-6 flex-1">
+                                                    {/* Total Counter Widget */}
+                                                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-center">
+                                                        <p className="text-xs font-bold text-slate-400 uppercase mb-1">Total a Pagar</p>
+                                                        <p className="text-3xl font-black text-slate-800 tracking-tight">
+                                                            ${getSelectedTotal().toLocaleString()}
+                                                        </p>
+                                                    </div>
+
+                                                    <div className="space-y-2">
+                                                        <label className="block text-xs font-bold text-slate-500 uppercase">Monto Transferido / Pagado</label>
+                                                        <div className="relative">
+                                                            <span className="absolute left-4 top-3.5 text-slate-400 font-bold">$</span>
+                                                            <input
+                                                                type="number"
+                                                                className={`w-full p-3 pl-8 bg-white border-2 rounded-xl font-bold text-lg focus:outline-none transition-all ${Math.abs(parseFloat(reportedAmount || 0) - getSelectedTotal()) > 1
+                                                                    ? 'border-amber-300 focus:border-amber-500 text-amber-700 bg-amber-50/50'
+                                                                    : 'border-slate-200 focus:border-green-500 text-slate-800'
+                                                                    }`}
+                                                                placeholder="0.00"
+                                                                value={reportedAmount}
+                                                                onChange={(e) => setReportedAmount(e.target.value)}
+                                                            />
+                                                        </div>
+                                                        {Math.abs(parseFloat(reportedAmount || 0) - getSelectedTotal()) > 1 && selectedInvoices.size > 0 && (
+                                                            <p className="text-xs text-amber-600 font-bold mt-1 flex items-center gap-1">
+                                                                <AlertTriangle size={12} /> El monto difiere de la selección.
+                                                            </p>
+                                                        )}
+                                                    </div>
+
+                                                    <div className="space-y-2">
+                                                        <label className="block text-xs font-bold text-slate-500 uppercase">Comprobante</label>
+                                                        <label className={`flex flex-col items-center justify-center w-full h-24 border-2 border-dashed rounded-xl cursor-pointer transition-all ${paymentFile
+                                                            ? 'border-green-400 bg-green-50'
+                                                            : 'border-slate-200 hover:border-blue-400 hover:bg-slate-50'
+                                                            }`}>
+                                                            {paymentFile ? (
+                                                                <div className="text-center px-4">
+                                                                    <div className="bg-white p-2 rounded-full shadow-sm inline-block mb-1">
+                                                                        <CheckCircle size={20} className="text-green-500" />
+                                                                    </div>
+                                                                    <p className="text-xs font-bold text-green-700 truncate max-w-[200px]">{paymentFile.name}</p>
+                                                                    <p className="text-[10px] text-green-600">{(paymentFile.size / 1024 / 1024).toFixed(2)} MB</p>
+                                                                </div>
+                                                            ) : (
+                                                                <div className="text-center p-4">
+                                                                    <Download size={24} className="text-slate-300 mx-auto mb-2" />
+                                                                    <p className="text-xs font-bold text-slate-500">Haz clic para subir imagen/PDF</p>
+                                                                </div>
+                                                            )}
+                                                            <input type="file" className="hidden" onChange={handleFileChange} accept="image/*,application/pdf" />
+                                                        </label>
+                                                    </div>
+
+                                                    <div className="space-y-2">
+                                                        <label className="block text-xs font-bold text-slate-500 uppercase">Comentarios</label>
+                                                        <textarea
+                                                            className="w-full h-20 p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 resize-none focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all"
+                                                            placeholder="Banco, Fecha de transferencia, etc..."
+                                                            value={paymentComment}
+                                                            onChange={(e) => setPaymentComment(e.target.value)}
+                                                        />
+                                                    </div>
+                                                </div>
+
+                                                <div className="pt-6 mt-2 border-t border-slate-100">
+                                                    <button
+                                                        onClick={handlePaymentReport}
+                                                        disabled={!reportedAmount || selectedInvoices.size === 0}
+                                                        className="w-full py-4 bg-green-600 hover:bg-green-700 shadow-xl shadow-green-600/20 disabled:opacity-50 disabled:shadow-none disabled:cursor-not-allowed text-white rounded-xl font-bold text-lg transition-all transform active:scale-[0.98] flex items-center justify-center gap-2"
+                                                    >
+                                                        Confirmar Pago
+                                                    </button>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>

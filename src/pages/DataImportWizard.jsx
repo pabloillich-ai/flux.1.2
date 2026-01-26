@@ -219,7 +219,7 @@ export default function DataImportWizard() {
 
     const handleFinalize = async () => {
         setUploading(true);
-        const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+        const { API_URL } = await import('../config');
 
         try {
             const payload = {

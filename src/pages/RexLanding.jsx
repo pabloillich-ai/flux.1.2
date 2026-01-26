@@ -73,9 +73,9 @@ const Hero = ({ openContact }) => {
                 className="flex flex-col items-center"
             >
                 <img
-                    src="/logo-rex-gold.jpg"
+                    src="/REXLogogifanim.gif"
                     alt="REX Consulting Logo"
-                    className="h-64 md:h-80 mb-8 object-contain"
+                    className="h-96 md:h-[30rem] mb-8 object-contain"
                 />
 
                 <h1 className="text-4xl md:text-6xl font-extrabold text-slate-900 tracking-tight leading-tight mb-6">

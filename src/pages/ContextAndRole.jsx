@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import ImmersiveModal from '../components/ImmersiveModal';
 
-const API_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000';
+import { API_URL } from '../config';
 const QUEUE_API_URL = `${API_URL}/api/queue`;
 
 export default function ContextAndRole() {

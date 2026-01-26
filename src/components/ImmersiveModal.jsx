@@ -10,7 +10,7 @@ import clsx from 'clsx';
 import { supabase } from '../lib/supabase';
 import MicroCalendar from './MicroCalendar';
 
-const API_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000';
+import { API_URL } from '../config';
 
 const RISK_STYLES = {
     'Excelente': { color: 'green', border: 'border-l-green-500', bg: 'bg-green-500/10', text: 'text-green-400' },

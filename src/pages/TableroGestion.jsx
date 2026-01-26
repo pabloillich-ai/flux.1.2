@@ -34,7 +34,7 @@ import { supabase } from '../lib/supabase';
 import MicroCalendar from '../components/MicroCalendar';
 
 // Define API URL from Env or Default
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+import { API_URL } from '../config';
 
 // === CONFIG ===
 const COLUMNS = {
@@ -240,6 +240,7 @@ export default function TableroGestion() {
                 }
             } catch (err) {
                 console.error("API Error", err);
+                console.log("Attempted URL:", `${API_URL}/dashboard`);
                 setError(err.message || "Error desconocido");
                 setItems([]);
             } finally {
