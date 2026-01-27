@@ -34,17 +34,21 @@ A modern, high-performance web application for debt collection management, built
     - Open the **SQL Editor**.
     - Run the contents of the `schema.sql` file included in the artifacts folder.
 
-## 📦 Deployment (Netlify)
+## 📦 Deployment (Vercel)
 
-This project is configured for seamless deployment on Netlify.
+This project is optimized for deployment on Vercel.
 
-1.  Push this repository to GitHub/GitLab.
-2.  Log in to [Netlify](https://netlify.com).
-3.  "Import from Git".
-4.  Netlify will detect the settings automatically (from `netlify.toml`).
-5.  **Important**: Add your `VITE_SUPABASE_...` environment variables in the Netlify Dashboard under "Site Settings > Environment Variables".
+1.  Connect your GitHub account to [Vercel](https://vercel.com).
+2.  Import the repository `Conect_Pulse2.1`.
+3.  Vercel will automatically detect the Vite configuration.
+4.  **Environment Variables**: In the Vercel project settings, add:
+    - `VITE_API_URL`: `https://backend-g6uy.onrender.com`
+    - `VITE_SUPABASE_URL`: (Your Supabase URL)
+    - `VITE_SUPABASE_ANON_KEY`: (Your Supabase Key)
 
 ## 📁 Project Structure
-- `src/components`: Reusable UI components (Sidebar, KPICard, etc.).
-- `src/pages`: Application views (Dashboard, Kanban, Landing).
-- `src/lib`: Utilities (Supabase client, Chart setup).
+- `src/services`: API handlers and business logic.
+- `src/pages`: Main application views.
+- `src/components`: UI components.
+- `vercel.json`: Routing configuration for SPA.
+
