@@ -50,3 +50,24 @@ env/
 
 # System
 Thumbs.db
+
+# Project Specific - Excluding Backend for Frontend-only repo
+backend/
+migrations/
+venv/
+*.py
+*.docx
+*.zip
+logo_b64.txt
+REXLogogifanim.gif
+public/REXLogogifanim.gif
+*.bat
+*.csv
+ARQUITECTURA_FRONTEND.md
+Análisis_Patrones_Diseño.md
+IMPLEMENTACION_COMPLETADA.md
+REFACTORIZACION_BACKEND_COMPLETADA.md
+Recomendaciones_Mejora.md
+Wix_Embed.html
+Maindemo.html
+Gestion_Cartera.js
