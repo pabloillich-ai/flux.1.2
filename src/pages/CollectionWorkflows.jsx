@@ -161,7 +161,8 @@ const CollectionWorkflows = () => {
                 workflow_id: workflowId,
                 name: 'Nuevo Paso',
                 days_offset: newOffset,
-                order_index: dbOrderIndex
+                order_index: dbOrderIndex,
+                tenant_id: profile.tenant_id
             };
 
             const { data, error } = await supabase
@@ -218,7 +219,8 @@ const CollectionWorkflows = () => {
                 workflow_id: workflowId,
                 name: 'Nuevo Paso',
                 days_offset: 1,
-                order_index: nodes.length + 1
+                order_index: nodes.length + 1,
+                tenant_id: profile.tenant_id
             };
 
             const { data, error } = await supabase

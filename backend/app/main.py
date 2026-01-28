@@ -45,11 +45,11 @@ app.add_middleware(
 )
 
 # === Include Routers ===
-app.include_router(dashboard.router)
-app.include_router(clients.router)
-app.include_router(crm.router)
-app.include_router(portal.router)
-app.include_router(admin.router)
+app.include_router(dashboard.router, prefix="/api")
+app.include_router(clients.router, prefix="/api")
+app.include_router(crm.router, prefix="/api")
+app.include_router(portal.router, prefix="/api")
+app.include_router(admin.router, prefix="/api")
 
 # === Health Check ===
 @app.get("/health", tags=["health"])

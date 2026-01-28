@@ -13,7 +13,7 @@ export const getDashboardData = async () => {
         const timeoutId = setTimeout(() => controller.abort(), 2000);
 
         try {
-            const res = await fetch(`${API_URL}/dashboard`, {
+            const res = await fetch(`${API_URL}/api/dashboard`, {
                 signal: controller.signal,
                 headers: {
                     'Content-Type': 'application/json'
