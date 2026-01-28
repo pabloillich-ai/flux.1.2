@@ -11,17 +11,17 @@ export const dashboardService = {
    * @returns {Promise<Object>} Dashboard data
    */
   async getDashboard(token) {
-    const response = await fetch(`${API_URL}/dashboard`, {
+    const response = await fetch(`${API_URL}/api/dashboard`, {
       headers: {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
       }
     });
-    
+
     if (!response.ok) {
       throw new Error(`Dashboard fetch failed: ${response.statusText} (${response.status})`);
     }
-    
+
     return response.json();
   },
 
@@ -37,11 +37,11 @@ export const dashboardService = {
         'Content-Type': 'application/json'
       }
     });
-    
+
     if (!response.ok) {
       throw new Error(`Stats fetch failed: ${response.statusText} (${response.status})`);
     }
-    
+
     return response.json();
   },
 
@@ -58,11 +58,11 @@ export const dashboardService = {
         'Content-Type': 'application/json'
       }
     });
-    
+
     if (!response.ok) {
       throw new Error(`Daily process failed: ${response.statusText} (${response.status})`);
     }
-    
+
     return response.json();
   }
 };
