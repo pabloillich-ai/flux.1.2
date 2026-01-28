@@ -59,7 +59,7 @@ export default function GestionCartera() {
                 console.log("API_URL:", API_URL);
                 console.log("Token available:", !!token);
 
-                const res = await fetch(`${API_URL}/dashboard`, {
+                const res = await fetch(`${API_URL}/api/dashboard`, {
                     headers: { 'Authorization': token ? `Bearer ${token}` : '' }
                 });
 

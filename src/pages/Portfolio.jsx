@@ -50,7 +50,7 @@ const Portfolio = () => {
                 'Authorization': token ? `Bearer ${token}` : ''
             };
 
-            const response = await fetch(`${API_URL}/dashboard`, { headers });
+            const response = await fetch(`${API_URL}/api/dashboard`, { headers });
             if (!response.ok) throw new Error('Failed to fetch data');
             const data = await response.json();
 
