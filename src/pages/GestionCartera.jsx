@@ -47,6 +47,11 @@ export default function GestionCartera() {
     const [searchTerm, setSearchTerm] = useState('');
     const [filterRisk, setFilterRisk] = useState('Todos');
 
+    // Modal Form States
+    const [formNote, setFormNote] = useState('');
+    const [formDate, setFormDate] = useState('');
+    const [formAmount, setFormAmount] = useState('');
+
     // Fetch Data on Mount
     useEffect(() => {
         const fetchData = async () => {
@@ -156,6 +161,58 @@ export default function GestionCartera() {
     const openAction = (type) => {
         setActionType(type);
         setIsActionModalOpen(true);
+    };
+
+    const handleSaveInteraction = async () => {
+        if (!selectedClient) return;
+
+        setLoading(true);
+        try {
+            const session = await supabase.auth.getSession();
+            const token = session?.data?.session?.access_token;
+
+            const payload = {
+                id_cliente: selectedClient.id,
+                rut_id_cliente: selectedClient.rut,
+                fecha_y_hora: new Date().toISOString(),
+                tipo_gestion: actionType === 'call' ? 'Llamada' : actionType === 'promise' ? 'Compromiso' : 'Email',
+                canal: actionType === 'call' ? 'Telefono' : actionType === 'promise' ? 'Web' : 'Email',
+                sentido: 'Saliente',
+                resultado_estado: actionType === 'promise' ? 'Promesa de Pago' : 'Gestionado',
+                observaciones_mensaje: actionType === 'promise'
+                    ? `Promesa de pago por $${formAmount}. Fecha: ${formDate}. ${formNote}`
+                    : formNote,
+                fecha_promesa_pago: actionType === 'promise' ? formDate : null,
+                agente_responsable: 'Agente Web'
+            };
+
+            const res = await fetch(`${API_URL}/api/crm`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': token ? `Bearer ${token}` : ''
+                },
+                body: JSON.stringify(payload)
+            });
+
+            if (res.ok) {
+                // Success: Close and Clean
+                setIsActionModalOpen(false);
+                setFormNote('');
+                setFormDate('');
+                setFormAmount('');
+                // OPTIONAL: Local update of items or window reload
+                window.location.reload();
+            } else {
+                const errTxt = await res.text();
+                console.error("Error saving CRM:", errTxt);
+                alert("Error al guardar gestión: " + errTxt);
+            }
+        } catch (err) {
+            console.error("Catch Error saving interaction", err);
+        } finally {
+            setLoading(false);
+        }
     };
 
     if (loading) return (
@@ -341,7 +398,7 @@ export default function GestionCartera() {
                                                 <tbody className="divide-y divide-slate-50 text-xs">
                                                     {selectedClient.invoices.map((inv, idx) => (
                                                         <tr key={inv.id || idx} className="hover:bg-slate-50/50 transition-colors">
-                                                            <td className="px-6 py-5 font-bold text-slate-800">{inv.id}</td>
+                                                            <td className="px-6 py-5 font-bold text-slate-800">{inv.docNumber || inv.id}</td>
                                                             <td className="px-6 py-5 text-slate-500 font-medium">{inv.due}</td>
                                                             <td className="px-6 py-5 text-right font-black text-slate-900">${(inv.amount || 0).toLocaleString()}</td>
                                                             <td className="px-6 py-5 text-center">

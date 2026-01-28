@@ -252,6 +252,7 @@ def get_dashboard_data(tenant_id: str = Depends(get_tenant_from_header)):
             for inv in client_invs:
                 frontend_invs.append({
                     "id": inv.get('uuid') or inv.get('id'),
+                    "docNumber": inv.get('nro_doc') or inv.get('serie_numero'),
                     "amount": inv.get('saldo_pendiente', 0),
                     "currency": inv.get('moneda', 'UYU'),
                     "dueDate": inv.get('fecha_vencimiento'),

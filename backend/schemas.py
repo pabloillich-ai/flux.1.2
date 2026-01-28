@@ -28,11 +28,12 @@ class InvoiceStatus(str, Enum):
 
 class InvoiceRead(BaseModel):
     id: Optional[str] = None # Some might map from id_interno or database id
+    docNumber: Optional[str] = None
     issueDate: Optional[str] = None
     dueDate: Optional[str] = None
     amount: float
     currency: str
-    status: Optional[str] = None # Should ideally use InvoiceStatus, but data might be dirty. Keeping str for safety.
+    status: Optional[str] = None 
 
 class CRMHistoryItem(BaseModel):
     # Reflects DB columns mostly, but for frontend consistency

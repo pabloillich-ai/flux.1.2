@@ -13,10 +13,14 @@ export const getDashboardData = async () => {
         const timeoutId = setTimeout(() => controller.abort(), 2000);
 
         try {
+            const session = await supabase.auth.getSession();
+            const token = session?.data?.session?.access_token;
+
             const res = await fetch(`${API_URL}/api/dashboard`, {
                 signal: controller.signal,
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'Authorization': token ? `Bearer ${token}` : ''
                 }
             });
             clearTimeout(timeoutId);
@@ -108,7 +112,8 @@ async function fetchFallbackData() {
 
         // Join Invoices
         const clientInvoices = invoices.filter(inv => inv.rut_ci === client.rut_ci).map(inv => ({
-            id: inv.id,
+            id: inv.id || inv.uuid,
+            docNumber: inv.nro_doc || inv.serie_numero,
             amount: inv.saldo_pendiente,
             currency: inv.moneda,
             dueDate: inv.fecha_vencimiento,
