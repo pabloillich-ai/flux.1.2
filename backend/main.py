@@ -356,31 +356,39 @@ def get_prioritized_queue(
     tenant_id: str = Depends(get_tenant_from_header)
 ):
     try:
-        # Fetch Data
-        clients_resp = supabase.table('clientes_maestra').select("*").eq('tenant_id', tenant_id).execute()
-        invoices_resp = supabase.table('inv_docs').select("*").eq('tenant_id', tenant_id).gt('saldo_pendiente', 0).execute()
-        
-        # Recent Broken Promises (Last 7 days)
-        # In a real scenario, we'd query this efficiently. For now, fetch recent CRMs.
-        seven_days_ago = datetime.now() # Logic to subtract 7 days later
-        # Optimization: Fetch only 'Promesa Incumplida' or check statuses logic
-        crm_resp = supabase.table('crm_gestion').select("id_cliente, resultado_estado, fecha_y_hora").eq('tenant_id', tenant_id).execute()
-        
-        clients = clients_resp.data
-        invoices = invoices_resp.data
-        crms = crm_resp.data
+        # Fetch Data with defensive checks
+        clients = []
+        try:
+            res = supabase.table('clientes_maestra').select("*").eq('tenant_id', tenant_id).execute()
+            clients = res.data or []
+        except Exception as e:
+            print(f"Queue Error (clients): {e}")
+
+        invoices = []
+        try:
+            res = supabase.table('inv_docs').select("*").eq('tenant_id', tenant_id).gt('saldo_pendiente', 0).execute()
+            invoices = res.data or []
+        except Exception as e:
+            print(f"Queue Error (invoices): {e}")
+
+        crms = []
+        try:
+            res = supabase.table('crm_gestion').select("id_cliente, resultado_estado, fecha_y_hora").eq('tenant_id', tenant_id).execute()
+            crms = res.data or []
+        except Exception as e:
+            print(f"Queue Error (crm): {e}")
         
         # Pre-process Invoices by Client
         inv_map = {}
         for inv in invoices:
             rut = inv.get('rut_ci')
-            if rut not in inv_map: inv_map[rut] = []
-            inv_map[rut].append(inv)
+            if rut:
+                if rut not in inv_map: inv_map[rut] = []
+                inv_map[rut].append(inv)
             
         # Pre-process CRMs for Broken Promises
         broken_promise_map = {} # client_id -> bool
         for c in crms:
-            # Check date logic if needed, for now assume all loaded are relevant or filter in query
             if c.get('resultado_estado') == 'Promesa Incumplida':
                 broken_promise_map[c.get('id_cliente')] = True
 
@@ -430,8 +438,8 @@ def get_prioritized_queue(
             
             queue.append({
                 "id": client.get('uuid'),
-                "rut": rut,
-                "name": client.get('razon_social'),
+                "rut": rut or "N/A",
+                "name": client.get('razon_social', 'Desconocido'),
                 "priorityScore": score,
                 "bucket": bucket,
                 "totalDebt": total_debt,
@@ -443,12 +451,12 @@ def get_prioritized_queue(
 
         # Sort by Score DESC
         queue.sort(key=lambda x: x['priorityScore'], reverse=True)
-        
         return queue
 
     except Exception as e:
-        print(f"Queue Error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"Fatal Queue Error: {e}")
+        return []
+
 
 # StatusUpdate moved to schemas.py
 
