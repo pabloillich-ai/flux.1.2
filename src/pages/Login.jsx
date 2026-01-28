@@ -18,7 +18,7 @@ export default function Login() {
         setError(null);
         try {
             await signIn(email, password);
-            navigate('/tablero-gestion');
+            navigate('/dashboard');
         } catch (err) {
             setError(err.message || "Error al iniciar sesión.");
             setLoading(false);
