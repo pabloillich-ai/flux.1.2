@@ -25,7 +25,6 @@ const navItems = [
         icon: CreditCard,
         label: 'Tableros',
         children: [
-            { label: 'Gestión Visual', path: '/tablero-gestion' },
             { label: 'Gestión Cartera', path: '/gestion-cartera' },
             { label: 'Kanban Clásico', path: '/kanban' },
             { label: 'Portfolio', path: '/portfolio' },
