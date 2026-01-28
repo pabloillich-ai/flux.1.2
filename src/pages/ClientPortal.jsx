@@ -23,6 +23,7 @@ export default function ClientPortal() {
     const [invoices, setInvoices] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
     useEffect(() => {
         if (clientId) {
@@ -477,9 +478,23 @@ export default function ClientPortal() {
             </main>
 
             {/* Footer Actions */}
-            <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 p-4 z-50 shadow-[0_-5px_20px_-5px_rgba(0,0,0,0.1)]">
+            <div className={clsx(
+                "fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 p-4 z-50 shadow-2xl transition-all duration-500 ease-in-out md:translate-y-0",
+                !isMobileMenuOpen ? "translate-y-[calc(100%-68px)] sm:translate-y-0" : "translate-y-0"
+            )}>
                 <div className="max-w-5xl mx-auto">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                    {/* Mobile Toggle Bar */}
+                    <div className="md:hidden flex flex-col items-center mb-4 pt-1 cursor-pointer group" onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}>
+                        <div className="w-12 h-1.5 bg-slate-300 rounded-full group-hover:bg-slate-400 transition-colors mb-2"></div>
+                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 group-hover:text-slate-600 transition-colors">
+                            {isMobileMenuOpen ? 'Ocultar Opciones' : 'Ver Opciones de Gestión'}
+                        </span>
+                    </div>
+
+                    <div className={clsx(
+                        "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 transition-opacity duration-300",
+                        !isMobileMenuOpen ? "opacity-40 pointer-events-none md:opacity-100 md:pointer-events-auto" : "opacity-100"
+                    )}>
                         <div className="relative">
                             {showCalendar && (
                                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" style={{ margin: 0 }}>
@@ -635,8 +650,8 @@ export default function ClientPortal() {
                                                                             key={inv.uniqueKey}
                                                                             onClick={() => toggleInvoiceSelection(inv.uniqueKey)}
                                                                             className={`cursor-pointer transition-all duration-200 group ${isSelected
-                                                                                    ? 'bg-green-50/60'
-                                                                                    : 'hover:bg-slate-50'
+                                                                                ? 'bg-green-50/60'
+                                                                                : 'hover:bg-slate-50'
                                                                                 }`}
                                                                         >
                                                                             <td className="p-4 text-center">

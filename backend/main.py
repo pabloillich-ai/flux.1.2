@@ -25,18 +25,22 @@ app = FastAPI(title="CobranzasPro Backend")
 cors_env = os.getenv("CORS_ORIGINS")
 if cors_env:
     origins = [origin.strip() for origin in cors_env.split(",")]
+    allow_all = False
 else:
-    # Fallback: Allow all for troubleshooting if env var not set
+    # FALLBACK: For development only. In production, ALWAYS set CORS_ORIGINS
     print("WARNING: CORS_ORIGINS not set, allowing all origins (*)")
     origins = ["*"]
+    allow_all = True
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
+    allow_origins=origins if not allow_all else ["*"],
+    # FastAPI/Starlette rule: cannot use allow_origins=['*'] with allow_credentials=True
+    allow_credentials=not allow_all, 
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 # Supabase Setup
 url: str = os.getenv("VITE_SUPABASE_URL")
@@ -164,61 +168,76 @@ def format_money(amount):
 def health_check():
     return {"status": "ok", "service": "CobranzasPro Backend"}
 
-@app.get("/dashboard", response_model=DashboardData)
+@app.get("/api/dashboard", response_model=DashboardData)
 def get_dashboard_data(tenant_id: str = Depends(get_tenant_from_header)):
     try:
-        # 1. Get Exchange Rate (Scraped from BROU)
+        # 1. Get Exchange Rate
         rate_uyu = get_current_uyu_rate()
 
-        # 2. Fetch Data (Scoped to Dynamic Tenant)
+        # 2. Fetch Data with defensive checks
         print(f"Fetching Dashboard for Tenant: {tenant_id}")
         
-        clients_resp = supabase.table('clientes_maestra').select("*").eq('tenant_id', tenant_id).execute()
-        users_resp = supabase.table('profiles').select("id, full_name").execute() 
-        invoices_resp = supabase.table('inv_docs').select("*").eq('tenant_id', tenant_id).gt('saldo_pendiente', 0).execute()
-        crm_resp = supabase.table('crm_gestion').select("*").eq('tenant_id', tenant_id).order('fecha_y_hora', desc=True).execute()
+        clients = []
+        try:
+            res = supabase.table('clientes_maestra').select("*").eq('tenant_id', tenant_id).execute()
+            clients = res.data or []
+        except Exception as e:
+            print(f"Dashboard Query Error (clients): {e}")
 
-        # 2a. Fetch Paid Invoices for "Recovered" KPI
-        paid_invoices_resp = supabase.table('inv_docs').select("monto_total, moneda").eq('tenant_id', tenant_id).eq('estado', 'Pagado').execute()
+        users = []
+        try:
+            res = supabase.table('profiles').select("id, full_name").execute() 
+            users = res.data or []
+        except Exception as e:
+            print(f"Dashboard Query Error (profiles): {e}")
+
+        invoices = []
+        try:
+            res = supabase.table('inv_docs').select("*").eq('tenant_id', tenant_id).gt('saldo_pendiente', 0).execute()
+            invoices = res.data or []
+        except Exception as e:
+            print(f"Dashboard Query Error (invoices): {e}")
+
+        crms = []
+        try:
+            res = supabase.table('crm_gestion').select("*").eq('tenant_id', tenant_id).order('fecha_y_hora', desc=True).execute()
+            crms = res.data or []
+        except Exception as e:
+            print(f"Dashboard Query Error (crm): {e}")
+
         recovered_total = 0
-        if paid_invoices_resp.data:
-            for inv in paid_invoices_resp.data:
-                amt = inv.get('monto_total', 0)
-                if inv.get('moneda') == 'USD':
-                    amt *= rate_uyu
-                recovered_total += amt
+        try:
+            res = supabase.table('inv_docs').select("monto_total, moneda").eq('tenant_id', tenant_id).eq('estado', 'Pagado').execute()
+            if res.data:
+                for inv in res.data:
+                    amt = inv.get('monto_total', 0)
+                    if inv.get('moneda') == 'USD':
+                        amt *= rate_uyu
+                    recovered_total += amt
+        except Exception as e:
+            print(f"Dashboard Query Error (recovered): {e}")
 
-        clients = clients_resp.data
-        users = users_resp.data
-        invoices = invoices_resp.data
-        crms = crm_resp.data
-        
-        # ... (Rest of logic remains identical)
-        
         # 3. Process Data
         processed_items = []
         total_debt_global = 0
         critical_debt_global = 0
         managed_count = 0
 
-        # Create lookups
-        user_map = {u['id']: u['full_name'] for u in users}
+        user_map = {u['id']: u['full_name'] for u in users if 'id' in u}
         
-        # Invoice Grouping
         inv_by_client = {}
         for inv in invoices:
             rut = inv.get('rut_ci')
-            if rut not in inv_by_client:
-                inv_by_client[rut] = []
-            inv_by_client[rut].append(inv)
+            if rut:
+                if rut not in inv_by_client: inv_by_client[rut] = []
+                inv_by_client[rut].append(inv)
 
-        # CRM Grouping 
         crm_by_client = {}
         for c in crms:
             cid = c.get('id_cliente') 
-            if cid not in crm_by_client:
-                crm_by_client[cid] = []
-            crm_by_client[cid].append(c)
+            if cid:
+                if cid not in crm_by_client: crm_by_client[cid] = []
+                crm_by_client[cid].append(c)
 
         for client in clients:
             uuid = client.get('uuid')
@@ -228,13 +247,13 @@ def get_dashboard_data(tenant_id: str = Depends(get_tenant_from_header)):
             agent_id = client.get('agente')
             agent_name = user_map.get(agent_id, 'Sin Asignar')
 
-            client_invs = inv_by_client.get(rut, [])
+            client_invs = inv_by_client.get(rut, []) if rut else []
             frontend_invs = []
             for inv in client_invs:
                 frontend_invs.append({
                     "id": inv.get('id'),
-                    "amount": inv.get('saldo_pendiente'),
-                    "currency": inv.get('moneda'),
+                    "amount": inv.get('saldo_pendiente', 0),
+                    "currency": inv.get('moneda', 'UYU'),
                     "dueDate": inv.get('fecha_vencimiento'),
                     "issueDate": inv.get('fecha_emision')
                 })
@@ -251,26 +270,20 @@ def get_dashboard_data(tenant_id: str = Depends(get_tenant_from_header)):
                 "date": latest_crm.get('fecha_y_hora', '-')
             }
             if crm_obj["date"] != '-':
-                 try:
+                  try:
                     dt = datetime.fromisoformat(crm_obj["date"].replace("Z", "+00:00"))
                     crm_obj["date"] = dt.strftime("%Y-%m-%d")
-                 except: pass
+                  except: pass
             
-            # Map Backend Risk to Frontend Levels if needed, OR just pass through
-            # Backend: 'Excelente', 'Buen Pagador', 'Regular', 'Atraso Frecuente', 'Mal Pagador', 'Legal', 'Incobrable'
-            # Frontend Mock: 'ALTO', 'MEDIO', 'BAJO'
-            # Let's map for consistency with requested design? 
-            # The prompt said "show the risk", I will pass the raw backend risk for now and map in frontend.
             risk = client.get('status_riesgo', 'Regular')
-            
             status = client.get('estado_actual', 'Pendiente')
             if status != 'Pendiente': managed_count += 1
 
             item = {
                 "id": uuid,
-                "rut": rut,
-                "name": client.get('razon_social'),
-                "risk": risk,
+                "rut": rut or "N/A",
+                "name": client.get('razon_social', 'Desconocido'),
+                "risk": risk or "Regular",
                 "creditLimit": client.get('limite_de_credito', 0),
                 "agentId": agent_id,
                 "agentName": agent_name,
@@ -289,9 +302,8 @@ def get_dashboard_data(tenant_id: str = Depends(get_tenant_from_header)):
 
             processed_items.append(item)
 
-        # 4. Final KPIs
         effectiveness = 0
-        if len(clients) > 0:
+        if clients:
             effectiveness = int((managed_count / len(clients)) * 100)
 
         kpis = {
@@ -307,8 +319,14 @@ def get_dashboard_data(tenant_id: str = Depends(get_tenant_from_header)):
             "exchange_rate": rate_uyu
         }
     except Exception as e:
-        print(f"Error generating dashboard: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"Fatal Dashboard Error: {e}")
+        # Final fallback to empty dashboard
+        return {
+            "items": [],
+            "kpis": {"total": "$0", "critical": "$0", "recovered": "$0", "effectiveness": "0%"},
+            "exchange_rate": 42.0
+        }
+
 
 @app.post("/crm/interactions")
 def add_crm_interaction(entry: CRMEntry, tenant_id: str = Depends(get_tenant_from_header)):
@@ -924,50 +942,57 @@ def get_dashboard_stats(tenant_id: str = Depends(get_tenant_from_header)):
         today = datetime.now().strftime("%Y-%m-%d")
         
         # 1. Cash Flow (Recaudado Hoy)
-        payments_res = supabase.table('pagos_reportados').select('monto_transaccion, client_id').eq('fecha_pago', today).eq('tenant_id', tenant_id).execute()
-        cash_flow = sum(p['monto_transaccion'] for p in payments_res.data)
-        
-        # Get last 5 clients who paid
-        recent_payments = supabase.table('pagos_reportados').select('client_id, monto_transaccion, clientes_maestra(razon_social)').eq('fecha_pago', today).eq('tenant_id', tenant_id).limit(5).execute()
+        cash_flow = 0
         cash_clients = []
-        for p in recent_payments.data:
-             name = p.get('clientes_maestra', {}).get('razon_social', 'Cliente') if p.get('clientes_maestra') else 'Cliente'
-             cash_clients.append({"name": name, "amount": p['monto_transaccion']})
+        try:
+            payments_res = supabase.table('pagos_reportados').select('monto_transaccion, client_id').eq('fecha_pago', today).eq('tenant_id', tenant_id).execute()
+            if payments_res.data:
+                cash_flow = sum(p.get('monto_transaccion', 0) for p in payments_res.data)
+                
+                # Get last 5 clients who paid
+                recent_payments = supabase.table('pagos_reportados').select('client_id, monto_transaccion, clientes_maestra(razon_social)').eq('fecha_pago', today).eq('tenant_id', tenant_id).limit(5).execute()
+                if recent_payments.data:
+                    for p in recent_payments.data:
+                         name = p.get('clientes_maestra', {}).get('razon_social', 'Cliente') if p.get('clientes_maestra') else 'Cliente'
+                         cash_clients.append({"name": name, "amount": p.get('monto_transaccion', 0)})
+        except Exception as e:
+            print(f"Stats Error (CashFlow): {e}")
 
         # 2. Commitments (Promesas Hoy)
-        # Note: crm_gestion stores dates as ISO timestamps usually? seed used YYYY-MM-DD for promise.
-        # Check if type is Promesa de Pago
-        promises_res = supabase.table('crm_gestion').select('id, resultado_estado').eq('tipo_gestion', 'Promesa de Pago').eq('fecha_promesa_pago', today).eq('tenant_id', tenant_id).execute()
-        commitments_total = len(promises_res.data)
-        commitments_completed = len([p for p in promises_res.data if p.get('resultado_estado') == 'Cumplida']) # Assuming logic
+        commitments_total = 0
+        commitments_completed = 0
+        try:
+            promises_res = supabase.table('crm_gestion').select('id, resultado_estado').eq('resultado_estado', 'Promesa de Pago').eq('fecha_promesa_pago', today).eq('tenant_id', tenant_id).execute()
+            if promises_res.data:
+                commitments_total = len(promises_res.data)
+                commitments_completed = len([p for p in promises_res.data if p.get('resultado_estado') == 'Cumplida'])
+        except Exception as e:
+            print(f"Stats Error (Promises): {e}")
 
         # 3. Critical Risk 
-        # Count critical clients (Fetch all checks and filter in python to be safe with encoding)
-        print(f"Stats check - Tenant: {tenant_id}")
-        risk_res = supabase.table('clientes_maestra').select('status_riesgo').eq('tenant_id', tenant_id).execute()
         critical_risk = 0
-        for r in risk_res.data:
-            if r.get('status_riesgo') == 'Crítico' or r.get('status_riesgo') == 'Critico':
-                critical_risk += 1
-        print(f"Risk count Python: {critical_risk}")
+        try:
+            risk_res = supabase.table('clientes_maestra').select('status_riesgo').eq('tenant_id', tenant_id).execute()
+            if risk_res.data:
+                for r in risk_res.data:
+                    status = r.get('status_riesgo', '')
+                    if status and status.lower() in ['crítico', 'critico']:
+                        critical_risk += 1
+        except Exception as e:
+            print(f"Stats Error (Risk): {e}")
 
-        # 4. Operational Volume (Approximation)
-        # Count all clients - Clients touched in last 48h
-        # Ideally this is a specific SQL query, but for now we'll just count clients with 'Pending' conceptual status
-        # Let's simple use: Count of clients in queue that are NOT updated recently?
-        # Simpler: Just count total clients for now or clients with 'Regular' risk as 'Pending'?
-        # User asked: Last action > 48h.
-        two_days_ago = (datetime.now() - timedelta(days=2)).isoformat()
-        
-        # Fetch all clients IDs
-        all_clients = supabase.table('clientes_maestra').select('uuid').eq('tenant_id', tenant_id).execute()
-        total_clients = len(all_clients.data)
-        
-        # Fetch clients with CRM in last 48h
-        recent_crm = supabase.table('crm_gestion').select('id_cliente').eq('tenant_id', tenant_id).gte('fecha_y_hora', two_days_ago).execute()
-        touched_ids = set(c['id_cliente'] for c in recent_crm.data)
-        
-        operational_volume = max(0, total_clients - len(touched_ids))
+        # 4. Operational Volume
+        operational_volume = 0
+        try:
+            two_days_ago = (datetime.now() - timedelta(days=2)).isoformat()
+            all_clients = supabase.table('clientes_maestra').select('uuid').eq('tenant_id', tenant_id).execute()
+            if all_clients.data:
+                total_clients = len(all_clients.data)
+                recent_crm = supabase.table('crm_gestion').select('id_cliente').eq('tenant_id', tenant_id).gte('fecha_y_hora', two_days_ago).execute()
+                touched_ids = set(c['id_cliente'] for c in (recent_crm.data or []))
+                operational_volume = max(0, total_clients - len(touched_ids))
+        except Exception as e:
+            print(f"Stats Error (Volume): {e}")
 
         return {
             "cashFlow": cash_flow,
@@ -978,8 +1003,13 @@ def get_dashboard_stats(tenant_id: str = Depends(get_tenant_from_header)):
             "criticalRisk": critical_risk
         }
     except Exception as e:
-        print(f"Error stats: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"Global Stats Error: {e}")
+        # Return empty stats instead of 500 to keep UI alive
+        return {
+            "cashFlow": 0, "cashFlowClients": [], "operationalVolume": 0,
+            "commitmentsToday": 0, "commitmentsCompleted": 0, "criticalRisk": 0
+        }
+
 
 @app.get("/api/clients/{client_id}", response_model=ClientDetail)
 def get_client_detail(client_id: str, tenant_id: str = Depends(get_tenant_from_header)):

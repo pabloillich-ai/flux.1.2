@@ -221,7 +221,7 @@ export default function TableroGestion() {
                 const session = await supabase.auth.getSession();
                 const token = session?.data?.session?.access_token;
 
-                const res = await fetch(`${API_URL}/dashboard`, {
+                const res = await fetch(`${API_URL}/api/dashboard`, {
                     headers: {
                         'Authorization': token ? `Bearer ${token}` : ''
                     }
