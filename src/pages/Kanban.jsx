@@ -25,6 +25,7 @@ import {
 import clsx from 'clsx';
 import { KPICard } from '../components/KPICard';
 import { ClientDetailModal } from '../components/ClientDetailModal';
+import EditDebtorModal from '../components/EditDebtorModal';
 
 import { supabase } from '../lib/supabase';
 import { getDashboardData } from '../lib/api';
@@ -64,7 +65,7 @@ const RISK_COLORS = {
 
 // === COMPONENTS ===
 
-function KanbanCard({ client, isOverlay, onExpand, exchangeRate }) {
+function KanbanCard({ client, isOverlay, onExpand, exchangeRate, onEdit }) {
     const { setNodeRef, attributes, listeners, transform, transition, isDragging } = useSortable({
         id: client.id,
         data: { type: 'Card', client },
@@ -159,7 +160,7 @@ function KanbanCard({ client, isOverlay, onExpand, exchangeRate }) {
                     title="Editar Cliente"
                     onClick={(e) => {
                         e.stopPropagation();
-                        // Add edit logic here
+                        if (onEdit) onEdit(client);
                     }}
                 >
                     <Edit2 size={14} />
@@ -169,7 +170,7 @@ function KanbanCard({ client, isOverlay, onExpand, exchangeRate }) {
     );
 }
 
-function KanbanColumn({ id, clients, onExpandCard, exchangeRate }) {
+function KanbanColumn({ id, clients, onExpandCard, exchangeRate, onEditCard }) {
     const { setNodeRef } = useSortable({ id: id, data: { type: 'Column', id } });
 
     const total = clients.reduce((acc, c) => acc + calculateTotalDebt(c.invoices, exchangeRate), 0);
@@ -196,7 +197,7 @@ function KanbanColumn({ id, clients, onExpandCard, exchangeRate }) {
             <div className="flex-1 p-3 overflow-y-auto space-y-3 scrollbar-thin scrollbar-thumb-card custom-scrollbar">
                 <SortableContext items={clients.map(c => c.id)} strategy={verticalListSortingStrategy}>
                     {clients.map(client => (
-                        <KanbanCard key={client.id} client={client} onExpand={onExpandCard} exchangeRate={exchangeRate} />
+                        <KanbanCard key={client.id} client={client} onExpand={onExpandCard} exchangeRate={exchangeRate} onEdit={onEditCard} />
                     ))}
                 </SortableContext>
             </div>
@@ -204,7 +205,7 @@ function KanbanColumn({ id, clients, onExpandCard, exchangeRate }) {
     );
 }
 
-function ListView({ clients, onExpand, exchangeRate }) {
+function ListView({ clients, onExpand, exchangeRate, onEdit }) {
     return (
         <div className="bg-sidebar rounded-xl border border-white/5 overflow-hidden">
             <table className="w-full text-sm text-left">
@@ -249,7 +250,12 @@ function ListView({ clients, onExpand, exchangeRate }) {
                                 >
                                     <Eye size={16} />
                                 </button>
-                                <button className="p-2 hover:bg-accent/10 hover:text-accent rounded"><Edit2 size={16} /></button>
+                                <button
+                                    className="p-2 hover:bg-accent/10 hover:text-accent rounded"
+                                    onClick={() => onEdit && onEdit(client)}
+                                >
+                                    <Edit2 size={16} />
+                                </button>
                             </td>
                         </tr>
                     ))}
@@ -373,6 +379,8 @@ export default function Kanban2() {
     // Modal State
     const [modalState, setModalState] = useState({ isOpen: false, clientId: null, newStatus: null });
     const [detailsModal, setDetailsModal] = useState({ isOpen: false, client: null });
+    const [editModal, setEditModal] = useState({ isOpen: false, client: null });
+    const [saving, setSaving] = useState(false);
 
     // Filters State
     const [searchTerm, setSearchTerm] = useState('');
@@ -479,6 +487,10 @@ export default function Kanban2() {
         setDetailsModal({ isOpen: true, client: client });
     };
 
+    const handleEditCard = (client) => {
+        setEditModal({ isOpen: true, client: client });
+    };
+
     return (
         <div className="h-[calc(100vh-100px)] flex flex-col gap-4">
 
@@ -546,9 +558,7 @@ export default function Kanban2() {
                         <option value="Incobrable">Incobrable</option>
                     </select>
 
-                    <button className="bg-accent text-sidebar font-bold px-4 py-2 rounded-lg text-sm hover:bg-accent/90 transition-colors shadow-lg shadow-accent/20">
-                        + Gestión
-                    </button>
+
                 </div>
             </div>
 
@@ -567,6 +577,7 @@ export default function Kanban2() {
                                 id={colId}
                                 clients={filteredItems.filter(c => c.status === colId)}
                                 onExpandCard={handleExpandCard}
+                                onEditCard={handleEditCard}
                             />
                         ))}
                     </div>
@@ -577,7 +588,7 @@ export default function Kanban2() {
                 </DndContext>
             ) : (
                 <div className="flex-1 overflow-auto">
-                    <ListView clients={filteredItems} onExpand={handleExpandCard} />
+                    <ListView clients={filteredItems} onExpand={handleExpandCard} exchangeRate={exchangeRate} onEdit={handleEditCard} />
                 </div>
             )}
 
@@ -597,6 +608,59 @@ export default function Kanban2() {
                 client={detailsModal.client}
                 exchangeRate={exchangeRate}
             />
+
+            {/* Edit Debtor Modal */}
+            {editModal.isOpen && editModal.client && (
+                <EditDebtorModal
+                    debtor={editModal.client}
+                    onClose={() => setEditModal({ isOpen: false, client: null })}
+                    onSave={async (updatedData) => {
+                        setSaving(true);
+                        try {
+                            // Use UUID from the form data if available, otherwise try to fetch it
+                            let uuidToUpdate = updatedData.uuid;
+
+                            if (!uuidToUpdate) {
+                                // Fallback: Find UUID using ID if for some reason it wasn't in the form data
+                                const { data: clientRecord } = await supabase
+                                    .from('clientes_maestra')
+                                    .select('uuid')
+                                    .eq('id_cliente', editModal.client.id)
+                                    .single();
+
+                                if (clientRecord) {
+                                    uuidToUpdate = clientRecord.uuid;
+                                }
+                            }
+
+                            if (!uuidToUpdate) {
+                                alert("No se pudo encontrar el identificador único (UUID) para actualizar el registro.");
+                                setSaving(false);
+                                return;
+                            }
+
+                            const { error } = await supabase
+                                .from('clientes_maestra')
+                                .update(updatedData)
+                                .eq('uuid', uuidToUpdate);
+
+                            if (error) throw error;
+
+                            // Update local state
+                            setItems(prev => prev.map(item => item.id === editModal.client.id ? { ...item, ...updatedData, risk: updatedData.status_riesgo || item.risk, name: updatedData.razon_social || item.name } : item));
+
+                            setEditModal({ isOpen: false, client: null });
+                            alert("Cliente actualizado correctamente");
+
+                        } catch (err) {
+                            console.error("Update failed", err);
+                            alert("Error al actualizar: " + err.message);
+                        } finally {
+                            setSaving(false);
+                        }
+                    }}
+                />
+            )}
 
         </div>
     );

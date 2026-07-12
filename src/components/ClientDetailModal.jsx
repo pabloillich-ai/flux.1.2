@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, ChevronDown, ChevronUp, User, Mail, Phone, Calendar as CalendarIcon, FileText, Download } from 'lucide-react';
+import { X, ChevronDown, ChevronUp, User, Mail, Phone, Calendar as CalendarIcon, FileText, Download, Edit2, Check, Save, Plus, MessageSquare } from 'lucide-react';
 import clsx from 'clsx';
 import MiniCalendar from "./MiniCalendar";
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
@@ -47,8 +47,102 @@ function ContactCard({ name, role, email }) {
 
 // === MAIN MODAL COMPONENT ===
 
+import { supabase } from '../lib/supabase';
+
+// === MAIN MODAL COMPONENT ===
+
 export function ClientDetailModal({ isOpen, onClose, client, exchangeRate = 1 }) {
     const [isCalendarExpanded, setIsCalendarExpanded] = useState(true);
+    const [localInvoices, setLocalInvoices] = useState([]);
+    const [editingInvoiceId, setEditingInvoiceId] = useState(null);
+    const [editFormData, setEditFormData] = useState({ comment: '', alertExcluded: false });
+    const [isAddingCrm, setIsAddingCrm] = useState(false);
+    const [crmNote, setCrmNote] = useState('');
+    const [crmDate, setCrmDate] = useState('');
+
+    React.useEffect(() => {
+        if (client && client.invoices) {
+            setLocalInvoices(client.invoices);
+        }
+    }, [client]);
+
+    const handleEditClick = (inv) => {
+        setEditingInvoiceId(inv.id);
+        setEditFormData({
+            comment: inv.comment || '',
+            alertExcluded: inv.alertExcluded || false
+        });
+    };
+
+    const handleCancelEdit = () => {
+        setEditingInvoiceId(null);
+        setEditFormData({ comment: '', alertExcluded: false });
+    };
+
+    const handleSaveEdit = async (invId) => {
+        // Optimistic Update
+        const updatedInvoices = localInvoices.map(inv => {
+            if (inv.id === invId) {
+                return { ...inv, comment: editFormData.comment, alertExcluded: editFormData.alertExcluded };
+            }
+            return inv;
+        });
+        setLocalInvoices(updatedInvoices);
+        setEditingInvoiceId(null);
+
+        // Update Supabase
+        try {
+            const { error } = await supabase
+                .from('inv_docs')
+                .update({
+                    Comentario: editFormData.comment,
+                    Alet_exclud: editFormData.alertExcluded
+                })
+                .eq('id', invId); // Assuming 'id' matches the DB UUID
+
+            if (error) throw error;
+        } catch (err) {
+            console.error("Error updating invoice:", err);
+            alert("Error al guardar cambios. Por favor recargue.");
+        }
+    };
+
+    const handleAddCrm = async (e) => {
+        e.preventDefault();
+        if (!crmNote.trim()) return;
+
+        try {
+            const newHistory = {
+                id_cliente: client.id || client.uuid, // Handle both id formats
+                fecha_y_hora: new Date().toISOString(),
+                observaciones_mensaje: crmNote,
+                fecha_promesa_pago: crmDate || null,
+                medio_contacto: 'Manual',
+                contacto_exitoso: true
+            };
+
+            const { error } = await supabase
+                .from('historial_crm')
+                .insert([newHistory]);
+
+            if (error) throw error;
+
+            // Optimistic update for UI
+            if (client.crmHistory) {
+                client.crmHistory.unshift(newHistory);
+            } else {
+                client.crmHistory = [newHistory];
+            }
+
+            // Reset
+            setCrmNote('');
+            setCrmDate('');
+            setIsAddingCrm(false);
+        } catch (err) {
+            console.error("Error adding CRM history:", err);
+            alert("Error al guardar historial.");
+        }
+    };
 
     // Close on Escape Key
     React.useEffect(() => {
@@ -77,8 +171,8 @@ export function ClientDetailModal({ isOpen, onClose, client, exchangeRate = 1 })
         return new Date(dateStr).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
     };
 
-    // Calculate Data for Chart (Using Exchange Rate)
-    const totalDebt = client.invoices.reduce((acc, i) => {
+    // Calculate Data for Chart (Using Exchange Rate) - Use localInvoices
+    const totalDebt = localInvoices.reduce((acc, i) => {
         const amount = i.currency === 'USD' ? i.amount * exchangeRate : i.amount;
         return acc + amount;
     }, 0);
@@ -127,7 +221,7 @@ export function ClientDetailModal({ isOpen, onClose, client, exchangeRate = 1 })
         const headers = ['ID Factura', 'Emisión', 'Vencimiento', 'Estado', 'Moneda', 'Importe'];
 
         // Map Data
-        const rows = client.invoices.map(inv => {
+        const rows = localInvoices.map(inv => {
             const isOverdue = new Date(inv.dueDate) < new Date();
             const status = isOverdue ? 'Vencida' : 'Al Día';
             return [
@@ -200,7 +294,7 @@ export function ClientDetailModal({ isOpen, onClose, client, exchangeRate = 1 })
     today.setHours(0, 0, 0, 0);
 
     // Sort all by date
-    const sortedInvoices = [...client.invoices].sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+    const sortedInvoices = [...localInvoices].sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
 
     // Find first one >= today
     const nextFutureInvoice = sortedInvoices.find(inv => new Date(inv.dueDate) >= today);
@@ -271,6 +365,54 @@ export function ClientDetailModal({ isOpen, onClose, client, exchangeRate = 1 })
 
                         {/* Widget: CRM History */}
                         <Widget title="Historial CRM" className="flex-1 max-h-[50%]">
+                            <div className="flex justify-between items-center mb-2">
+                                <span className="text-[10px] text-text-muted">Últimas interacciones</span>
+                                <button
+                                    onClick={() => setIsAddingCrm(!isAddingCrm)}
+                                    className="p-1 hover:bg-white/10 rounded text-accent transition-colors"
+                                    title="Agregar registro manual"
+                                >
+                                    <Plus size={14} />
+                                </button>
+                            </div>
+
+                            {/* Add CRM Form */}
+                            {isAddingCrm && (
+                                <form onSubmit={handleAddCrm} className="mb-3 bg-white/5 p-2 rounded border border-white/10 animate-in fade-in slide-in-from-top-2">
+                                    <textarea
+                                        className="w-full bg-black/20 text-xs text-white p-2 rounded mb-2 border border-white/5 focus:border-accent outline-none resize-none"
+                                        rows="3"
+                                        placeholder="Escribe una observación..."
+                                        value={crmNote}
+                                        onChange={(e) => setCrmNote(e.target.value)}
+                                        autoFocus
+                                    />
+                                    <div className="flex gap-2 mb-2">
+                                        <input
+                                            type="date"
+                                            className="bg-black/20 text-[10px] text-white p-1 rounded border border-white/5 w-full"
+                                            value={crmDate}
+                                            onChange={(e) => setCrmDate(e.target.value)}
+                                            title="Promesa de pago (opcional)"
+                                        />
+                                    </div>
+                                    <div className="flex justify-end gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsAddingCrm(false)}
+                                            className="px-2 py-1 text-[10px] text-text-muted hover:text-white"
+                                        >
+                                            Cancelar
+                                        </button>
+                                        <button
+                                            type="submit"
+                                            className="px-2 py-1 bg-accent text-white text-[10px] rounded font-bold hover:bg-accent/90"
+                                        >
+                                            Guardar
+                                        </button>
+                                    </div>
+                                </form>
+                            )}
                             <div className="space-y-3">
                                 {client.crmHistory && client.crmHistory.slice(0, 3).map((entry, idx) => (
                                     <div key={idx} className="text-sm border-l-2 border-accent pl-3 py-1 relative">
@@ -314,7 +456,7 @@ export function ClientDetailModal({ isOpen, onClose, client, exchangeRate = 1 })
                             <div className="bg-card p-4 rounded-xl border border-white/5">
                                 <div className="text-xs text-text-muted uppercase">Facturas Vencidas</div>
                                 <div className="text-2xl font-bold text-red-500 mt-1">
-                                    {client.invoices.filter(i => new Date(i.dueDate) < new Date()).length}
+                                    {localInvoices.filter(i => new Date(i.dueDate) < new Date()).length}
                                 </div>
                             </div>
                             <div className="bg-card p-4 rounded-xl border border-white/5">
@@ -361,12 +503,17 @@ export function ClientDetailModal({ isOpen, onClose, client, exchangeRate = 1 })
                                             <th className="p-3">Emisión</th>
                                             <th className="p-3">Vencimiento</th>
                                             <th className="p-3">Estado</th>
+                                            <th className="p-3">Comentario</th>
+                                            <th className="p-3 text-center">Excluir</th>
                                             <th className="p-3 text-right pr-4">Importe</th>
+                                            <th className="p-3 text-center">Acción</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-white/5">
-                                        {client.invoices.map(inv => {
+                                        {localInvoices.map(inv => {
                                             const isOverdue = new Date(inv.dueDate) < new Date();
+                                            const isEditing = editingInvoiceId === inv.id;
+
                                             return (
                                                 <tr key={inv.id} className="hover:bg-white/5 transition-colors">
                                                     <td className="p-3 pl-4 font-mono text-text-main font-medium">#{inv.id}</td>
@@ -381,15 +528,61 @@ export function ClientDetailModal({ isOpen, onClose, client, exchangeRate = 1 })
                                                             {isOverdue ? "Vencida" : "Al Día"}
                                                         </span>
                                                     </td>
+
+                                                    {/* Comentario Column */}
+                                                    <td className="p-3 max-w-[200px]">
+                                                        {isEditing ? (
+                                                            <input
+                                                                type="text"
+                                                                className="w-full bg-black/20 border border-white/10 rounded px-2 py-1 text-xs text-white focus:border-accent outline-none"
+                                                                value={editFormData.comment}
+                                                                onChange={(e) => setEditFormData({ ...editFormData, comment: e.target.value })}
+                                                                autoFocus
+                                                            />
+                                                        ) : (
+                                                            <div className="truncate text-xs text-text-muted" title={inv.comment || ''}>
+                                                                {inv.comment || '-'}
+                                                            </div>
+                                                        )}
+                                                    </td>
+
+                                                    {/* Alert Excluded Column */}
+                                                    <td className="p-3 text-center">
+                                                        {isEditing ? (
+                                                            <input
+                                                                type="checkbox"
+                                                                className="accent-accent w-4 h-4 cursor-pointer"
+                                                                checked={editFormData.alertExcluded}
+                                                                onChange={(e) => setEditFormData({ ...editFormData, alertExcluded: e.target.checked })}
+                                                            />
+                                                        ) : (
+                                                            inv.alertExcluded ? <Check size={16} className="text-red-500 mx-auto" /> : <span className="text-white/10 text-xs">-</span>
+                                                        )}
+                                                    </td>
+
                                                     <td className="p-3 text-right pr-4 font-mono font-bold text-text-main">
                                                         {formatMoney(inv.amount, inv.currency)}
+                                                    </td>
+
+                                                    {/* Action Column */}
+                                                    <td className="p-3 text-center">
+                                                        {isEditing ? (
+                                                            <div className="flex justify-center gap-1">
+                                                                <button onClick={() => handleSaveEdit(inv.id)} className="p-1 hover:bg-green-500/20 text-green-500 rounded"><Save size={16} /></button>
+                                                                <button onClick={handleCancelEdit} className="p-1 hover:bg-red-500/20 text-red-500 rounded"><X size={16} /></button>
+                                                            </div>
+                                                        ) : (
+                                                            <button onClick={() => handleEditClick(inv)} className="p-1 hover:bg-white/10 text-text-muted hover:text-white rounded">
+                                                                <Edit2 size={16} />
+                                                            </button>
+                                                        )}
                                                     </td>
                                                 </tr>
                                             )
                                         })}
-                                        {client.invoices.length === 0 && (
+                                        {localInvoices.length === 0 && (
                                             <tr>
-                                                <td colSpan="5" className="text-center py-8 text-text-muted italic">No hay facturas pendientes.</td>
+                                                <td colSpan="8" className="text-center py-8 text-text-muted italic">No hay facturas pendientes.</td>
                                             </tr>
                                         )}
                                     </tbody>

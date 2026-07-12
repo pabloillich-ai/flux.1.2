@@ -57,10 +57,11 @@ export function Sidebar({ isOpen, toggle }) {
         >
             <div className="flex items-center gap-3 mb-8 h-10 overflow-hidden shrink-0">
                 <div className="w-8 h-8 flex items-center justify-center shrink-0">
-                    <img src="/logo_pulse.png" alt="Conect Pulse" className="w-full h-full object-contain" />
+                    <img src="/FLUXLOGO.png" alt="FLUX Logo" className="w-full h-full object-contain" />
                 </div>
-                <span className={clsx("text-lg whitespace-nowrap transition-opacity duration-200", !isOpen && "opacity-0 hidden")}>
-                    <strong>CONECT</strong> Pulse
+                <span className={clsx("whitespace-nowrap transition-opacity duration-200 leading-none", !isOpen && "opacity-0 hidden")}>
+                    <strong className="text-lg">FLUX</strong>
+                    <span className="block text-[9px] uppercase tracking-[0.15em] text-emerald-400 font-bold">Technologies</span>
                 </span>
             </div>
 

@@ -17,7 +17,7 @@ export function Header() {
     const location = useLocation();
     const { user, profile } = useAuth();
     // Default fallback or specific match
-    const currentInfo = PAGE_TITLES[location.pathname] || { title: 'CONECT Pulse', subtitle: 'Sistema de Gestion de Cobranza' };
+    const currentInfo = PAGE_TITLES[location.pathname] || { title: 'FLUX', subtitle: 'Sistema de Gestión de Cobranza' };
 
     const userName = profile?.full_name || user?.user_metadata?.full_name || user?.email || 'Usuario';
     const userInitial = userName.charAt(0).toUpperCase();

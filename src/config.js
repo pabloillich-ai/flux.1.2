@@ -10,5 +10,7 @@ const isLocal = window.location.hostname === 'localhost' || window.location.host
 // Use production URL if defined in env, otherwise decide based on hostname
 export const API_URL = isLocal ? LOCAL_API_URL : PRODUCTION_API_URL;
 
-console.log('App Config Loaded. API_URL:', API_URL, 'Mode:', isLocal ? 'LOCAL' : 'PRODUCTION');
+if (import.meta.env.DEV) {
+  console.log('App Config Loaded. API_URL:', API_URL, 'Mode:', isLocal ? 'LOCAL' : 'PRODUCTION');
+}
 

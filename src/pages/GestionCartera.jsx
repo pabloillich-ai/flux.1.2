@@ -19,6 +19,7 @@ import { supabase } from '../lib/supabase';
 
 // Define API URL from Env or Default
 import { API_URL } from '../config';
+import { getDashboardData } from '../lib/api';
 
 // --- Componentes Auxiliares ---
 const RiskBadge = ({ risk }) => {
@@ -57,27 +58,9 @@ export default function GestionCartera() {
         const fetchData = async () => {
             setLoading(true);
             try {
-                const session = await supabase.auth.getSession();
-                const token = session?.data?.session?.access_token;
-
-                console.log("GestionCartera Debug: Starting Fetch");
-                console.log("API_URL:", API_URL);
-                console.log("Token available:", !!token);
-
-                const res = await fetch(`${API_URL}/api/dashboard`, {
-                    headers: { 'Authorization': token ? `Bearer ${token}` : '' }
-                });
-
-                console.log("Fetch Status:", res.status);
-
-                if (!res.ok) {
-                    const errorText = await res.text();
-                    console.error("Fetch Error Text:", errorText);
-                    throw new Error(`Error fetching data: ${res.status} ${res.statusText}`);
-                }
-
-                const data = await res.json();
-                console.log("Fetch Data Received:", data);
+                // Use the shared robust data fetcher
+                const data = await getDashboardData();
+                console.log("Data Received via getDashboardData:", data);
 
                 if (data && data.items) {
                     const enhancedItems = data.items.map(client => {
@@ -279,7 +262,7 @@ export default function GestionCartera() {
                                 <div className="flex justify-between items-center">
                                     <div>
                                         <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">Vencido</p>
-                                        <p className="text-xs font-black text-rose-600">${client.overdue.toLocaleString()}</p>
+                                        <p className="text-xs font-black text-rose-600">${(client.overdue || 0).toLocaleString()}</p>
                                     </div>
                                     <div className="text-right">
                                         <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">Antigüedad</p>
@@ -480,104 +463,106 @@ export default function GestionCartera() {
             </div>
 
             {/* Modal de Acción (Reutilizable para Llamada/Acuerdo/Email) */}
-            {isActionModalOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-                    <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px]" onClick={() => setIsActionModalOpen(false)}></div>
-                    <div className="relative bg-white w-full max-w-lg rounded-[32px] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 border border-white">
-                        <div className="p-6 border-b border-slate-50 flex items-center justify-between bg-slate-50/30">
-                            <div className="flex items-center gap-3">
-                                <div className="p-2.5 bg-indigo-50 rounded-2xl text-indigo-600">
-                                    {actionType === 'call' && <Phone size={20} />}
-                                    {actionType === 'promise' && <CalendarCheck size={20} />}
-                                    {actionType === 'email' && <Mail size={20} />}
+            {
+                isActionModalOpen && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                        <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px]" onClick={() => setIsActionModalOpen(false)}></div>
+                        <div className="relative bg-white w-full max-w-lg rounded-[32px] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 border border-white">
+                            <div className="p-6 border-b border-slate-50 flex items-center justify-between bg-slate-50/30">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2.5 bg-indigo-50 rounded-2xl text-indigo-600">
+                                        {actionType === 'call' && <Phone size={20} />}
+                                        {actionType === 'promise' && <CalendarCheck size={20} />}
+                                        {actionType === 'email' && <Mail size={20} />}
+                                    </div>
+                                    <div>
+                                        <h3 className="font-black text-slate-800 tracking-tight uppercase text-xs">
+                                            {actionType === 'call' && 'Registro de Gestión Telefónica'}
+                                            {actionType === 'promise' && 'Formalizar Acuerdo de Pago'}
+                                            {actionType === 'email' && 'Envío de Comunicación Formal'}
+                                        </h3>
+                                        <p className="text-[10px] text-slate-400 font-bold">{selectedClient.name}</p>
+                                    </div>
                                 </div>
-                                <div>
-                                    <h3 className="font-black text-slate-800 tracking-tight uppercase text-xs">
-                                        {actionType === 'call' && 'Registro de Gestión Telefónica'}
-                                        {actionType === 'promise' && 'Formalizar Acuerdo de Pago'}
-                                        {actionType === 'email' && 'Envío de Comunicación Formal'}
-                                    </h3>
-                                    <p className="text-[10px] text-slate-400 font-bold">{selectedClient.name}</p>
-                                </div>
+                                <button onClick={() => setIsActionModalOpen(false)} className="p-2 hover:bg-slate-200 rounded-full text-slate-400 transition-colors">
+                                    <X size={20} />
+                                </button>
                             </div>
-                            <button onClick={() => setIsActionModalOpen(false)} className="p-2 hover:bg-slate-200 rounded-full text-slate-400 transition-colors">
-                                <X size={20} />
-                            </button>
-                        </div>
 
-                        <div className="p-8 space-y-6">
-                            {actionType === 'promise' ? (
-                                <>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="space-y-2">
-                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Fecha Estimada</label>
-                                            <input
-                                                type="date"
-                                                value={formDate}
-                                                onChange={(e) => setFormDate(e.target.value)}
-                                                className="w-full bg-slate-50 border border-slate-200 p-4 rounded-2xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-                                            />
+                            <div className="p-8 space-y-6">
+                                {actionType === 'promise' ? (
+                                    <>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="space-y-2">
+                                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Fecha Estimada</label>
+                                                <input
+                                                    type="date"
+                                                    value={formDate}
+                                                    onChange={(e) => setFormDate(e.target.value)}
+                                                    className="w-full bg-slate-50 border border-slate-200 p-4 rounded-2xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                                                />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Importe Comprometido</label>
+                                                <input
+                                                    type="number"
+                                                    placeholder="0.00 $"
+                                                    value={formAmount}
+                                                    onChange={(e) => setFormAmount(e.target.value)}
+                                                    className="w-full bg-slate-50 border border-slate-200 p-4 rounded-2xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none font-bold"
+                                                />
+                                            </div>
                                         </div>
                                         <div className="space-y-2">
-                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Importe Comprometido</label>
-                                            <input
-                                                type="number"
-                                                placeholder="0.00 $"
-                                                value={formAmount}
-                                                onChange={(e) => setFormAmount(e.target.value)}
-                                                className="w-full bg-slate-50 border border-slate-200 p-4 rounded-2xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none font-bold"
-                                            />
+                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Modalidad de Pago</label>
+                                            <select className="w-full bg-slate-50 border border-slate-200 p-4 rounded-2xl text-sm outline-none font-medium">
+                                                <option>Transferencia Bancaria</option>
+                                                <option>Pago con Tarjeta</option>
+                                                <option>Giro / Confirming</option>
+                                            </select>
                                         </div>
-                                    </div>
+                                    </>
+                                ) : (
                                     <div className="space-y-2">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Modalidad de Pago</label>
-                                        <select className="w-full bg-slate-50 border border-slate-200 p-4 rounded-2xl text-sm outline-none font-medium">
-                                            <option>Transferencia Bancaria</option>
-                                            <option>Pago con Tarjeta</option>
-                                            <option>Giro / Confirming</option>
-                                        </select>
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Resumen Cualitativo</label>
+                                        <textarea
+                                            rows="4"
+                                            placeholder="Detalla los puntos clave de la negociación..."
+                                            value={formNote}
+                                            onChange={(e) => setFormNote(e.target.value)}
+                                            className="w-full bg-slate-50 border border-slate-200 p-4 rounded-2xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none resize-none font-medium"
+                                        ></textarea>
                                     </div>
-                                </>
-                            ) : (
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Resumen Cualitativo</label>
-                                    <textarea
-                                        rows="4"
-                                        placeholder="Detalla los puntos clave de la negociación..."
-                                        value={formNote}
-                                        onChange={(e) => setFormNote(e.target.value)}
-                                        className="w-full bg-slate-50 border border-slate-200 p-4 rounded-2xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none resize-none font-medium"
-                                    ></textarea>
-                                </div>
-                            )}
+                                )}
 
-                            <div className="pt-4 flex gap-3">
-                                <button
-                                    onClick={() => setIsActionModalOpen(false)}
-                                    className="flex-1 py-4 text-xs font-bold text-slate-500 hover:bg-slate-100 rounded-2xl transition-all"
-                                >
-                                    Cancelar
-                                </button>
-                                <button
-                                    onClick={handleSaveInteraction}
-                                    disabled={loading}
-                                    className="flex-[2] py-4 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-2xl shadow-xl shadow-indigo-100 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
-                                >
-                                    {loading ? 'Guardando...' : (
-                                        <>Finalizar Gestión <ArrowUpRight size={14} /></>
-                                    )}
-                                </button>
+                                <div className="pt-4 flex gap-3">
+                                    <button
+                                        onClick={() => setIsActionModalOpen(false)}
+                                        className="flex-1 py-4 text-xs font-bold text-slate-500 hover:bg-slate-100 rounded-2xl transition-all"
+                                    >
+                                        Cancelar
+                                    </button>
+                                    <button
+                                        onClick={handleSaveInteraction}
+                                        disabled={loading}
+                                        className="flex-[2] py-4 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-2xl shadow-xl shadow-indigo-100 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                                    >
+                                        {loading ? 'Guardando...' : (
+                                            <>Finalizar Gestión <ArrowUpRight size={14} /></>
+                                        )}
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
-            )}
+                )
+            }
 
             {/* Acción Global */}
             <button className="fixed bottom-8 right-8 w-14 h-14 bg-slate-900 text-white rounded-[20px] shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all group z-40">
                 <Plus size={24} className="group-hover:rotate-90 transition-transform" />
             </button>
 
-        </div>
+        </div >
     );
 }

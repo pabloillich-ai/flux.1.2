@@ -36,6 +36,7 @@ function App() {
           <Route path="/" element={<RexLanding />} />
           <Route path="/login" element={<Login />} />
           <Route path="/old-landing" element={<Landing />} />
+          <Route path="/rex-landing" element={<RexLanding />} />
           <Route path="/portal/:clientId" element={<ClientPortal />} />
 
           {/* Protected Application Routes */}

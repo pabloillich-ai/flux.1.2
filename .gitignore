@@ -25,10 +25,12 @@ dist-ssr
 
 # Security
 .env
+.env.local
 .env.production
 
 # Archived
 __archived_files/
+__CLEANUP/
 
 # Python
 __pycache__/

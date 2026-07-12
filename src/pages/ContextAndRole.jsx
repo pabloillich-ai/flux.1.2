@@ -18,6 +18,7 @@ import {
 import ImmersiveModal from '../components/ImmersiveModal';
 
 import { API_URL } from '../config';
+import { getQueueData, getStatsData } from '../lib/api';
 const QUEUE_API_URL = `${API_URL}/api/queue`;
 
 export default function ContextAndRole() {
@@ -41,32 +42,18 @@ export default function ContextAndRole() {
     const [fullDetailClient, setFullDetailClient] = useState(null);
     const [loadingDetails, setLoadingDetails] = useState(false);
 
+    // Context CRM History State
+    const [crmHistory, setCrmHistory] = useState([]);
+    const [loadingCrm, setLoadingCrm] = useState(false);
+
     const fetchQueue = async () => {
         setLoading(true);
         try {
-            const token = (await supabase.auth.getSession()).data.session?.access_token;
-            // Build Query Params
-            const params = new URLSearchParams({
-                min_debt: filters.minDebt,
-                aging_bucket: filters.agingBucket,
-                risk_level: filters.riskLevel
-            });
-
-            const res = await fetch(`${QUEUE_API_URL}?${params.toString()}`, {
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
-            });
-
-            if (res.ok) {
-                const data = await res.json();
-                setQueue(data);
-                // Auto-select first if available
-                if (data.length > 0 && !selectedId) {
-                    setSelectedId(data[0].id);
-                }
-            } else {
-                console.error("Failed to fetch queue");
+            const data = await getQueueData(filters);
+            setQueue(data || []);
+            // Auto-select first if available
+            if (data && data.length > 0 && !selectedId) {
+                setSelectedId(data[0].id);
             }
         } catch (error) {
             console.error(error);
@@ -78,14 +65,8 @@ export default function ContextAndRole() {
 
     const fetchStats = async () => {
         try {
-            const token = (await supabase.auth.getSession()).data.session?.access_token;
-            const res = await fetch(`${API_URL}/api/dashboard/stats`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (res.ok) {
-                const data = await res.json();
-                setStats(data);
-            }
+            const data = await getStatsData();
+            setStats(data);
         } catch (e) {
             console.error(e);
         } finally {
@@ -119,10 +100,37 @@ export default function ContextAndRole() {
         }
     };
 
+    const fetchCrmHistory = async (clientId) => {
+        if (!clientId) return;
+        setLoadingCrm(true);
+        try {
+            const { data, error } = await supabase
+                .from('crm_gestion')
+                .select('*')
+                .eq('id_cliente', clientId)
+                .order('fecha_y_hora', { ascending: false });
+
+            if (error) throw error;
+            setCrmHistory(data || []);
+        } catch (err) {
+            console.error("Error fetching CRM history", err);
+        } finally {
+            setLoadingCrm(false);
+        }
+    };
+
     useEffect(() => {
         fetchQueue();
         fetchStats();
     }, [filters]);
+
+    useEffect(() => {
+        if (selectedId) {
+            fetchCrmHistory(selectedId);
+        } else {
+            setCrmHistory([]);
+        }
+    }, [selectedId]);
 
     const selectedClient = queue.find(q => q.id === selectedId);
 
@@ -375,20 +383,35 @@ export default function ContextAndRole() {
                                     <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">Historial de Interacciones</h3>
 
                                     <div className="space-y-4 relative before:absolute before:left-4 before:top-2 before:bottom-0 before:w-px before:bg-white/5">
-                                        {[1, 2, 3].map(i => (
-                                            <div key={i} className="relative pl-10 group">
-                                                <div className="absolute left-0 top-0 size-8 rounded-full bg-[#1a1d24] border border-white/5 flex items-center justify-center z-10 group-hover:border-blue-500/50 transition-colors">
-                                                    <Clock size={14} className="text-gray-500 group-hover:text-blue-400" />
-                                                </div>
-                                                <div className="bg-[#1a1d24] border border-white/5 p-4 rounded-xl hover:border-white/10 transition-colors">
-                                                    <div className="flex justify-between items-start mb-1">
-                                                        <p className="text-sm font-medium text-gray-200">Llamada saliente sin respuesta</p>
-                                                        <span className="text-[10px] text-gray-500">Hace {i * 2}h</span>
+                                        {loadingCrm ? (
+                                            <div className="p-4 text-center text-xs text-gray-500">Cargando historial...</div>
+                                        ) : crmHistory.length === 0 ? (
+                                            <div className="p-4 text-center text-xs text-gray-500">Sin historial de interacciones.</div>
+                                        ) : (
+                                            crmHistory.map((item) => (
+                                                <div key={item.id} className="relative pl-10 group">
+                                                    <div className="absolute left-0 top-0 size-8 rounded-full bg-[#1a1d24] border border-white/5 flex items-center justify-center z-10 group-hover:border-blue-500/50 transition-colors">
+                                                        <Clock size={14} className="text-gray-500 group-hover:text-blue-400" />
                                                     </div>
-                                                    <p className="text-xs text-gray-500">Agente: Sistema • Intento automático</p>
+                                                    <div className="bg-[#1a1d24] border border-white/5 p-4 rounded-xl hover:border-white/10 transition-colors">
+                                                        <div className="flex justify-between items-start mb-1">
+                                                            <p className="text-sm font-medium text-gray-200">
+                                                                {item.tipo_gestion} - {item.resultado_estado}
+                                                            </p>
+                                                            <span className="text-[10px] text-gray-500">
+                                                                {item.fecha_y_hora ? new Date(item.fecha_y_hora).toLocaleDateString() : '-'}
+                                                            </span>
+                                                        </div>
+                                                        <p className="text-xs text-gray-500 hover:text-gray-400 transition-colors">
+                                                            {item.observaciones_mensaje || 'Sin observaciones'}
+                                                        </p>
+                                                        <p className="text-[10px] text-gray-600 mt-1 font-mono">
+                                                            Agente: {item.agente_responsable || 'Sistema'}
+                                                        </p>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        ))}
+                                            ))
+                                        )}
                                     </div>
                                 </div >
 

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { supabase } from '../lib/supabase';
 import {
     Search,
     Bell,
@@ -17,11 +18,40 @@ import {
     Calendar,
     Briefcase,
     Mail,
-    CheckCircle2
+    CheckCircle2,
+    Edit2,
+    Save
 } from 'lucide-react';
-import { supabase } from '../lib/supabase';
-
 import { API_URL } from '../config';
+import { getDashboardData } from '../lib/api';
+import EditDebtorModal from '../components/EditDebtorModal';
+
+const StatCard = ({ label, value, trend, trendType, icon, color }) => (
+    <div className="bg-[#1a1d24] border border-white/5 rounded-xl p-4 flex items-center justify-between">
+        <div>
+            <p className="text-gray-400 text-xs uppercase font-bold tracking-wider mb-1">{label}</p>
+            <h3 className="text-2xl font-bold text-white">{value}</h3>
+            <div className={`flex items-center gap-1 text-xs mt-1 ${trendType === 'up' ? 'text-emerald-400' : 'text-red-400'}`}>
+                {trendType === 'up' ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+                <span>{trend}</span>
+            </div>
+        </div>
+        <div className={`p-3 rounded-lg ${color}`}>
+            {icon}
+        </div>
+    </div>
+);
+
+// Reusing Risk Labels logic for consistency
+const RISK_LABELS = {
+    'Excelente': 'Excelente',
+    'Buen Pagador': 'Buen Pagador',
+    'Regular': 'Regular',
+    'Atraso Frecuente': 'Atraso Frecuente',
+    'Mal Pagador': 'Mal Pagador',
+    'Legal': 'Legal',
+    'Incobrable': 'Incobrable'
+};
 
 const Portfolio = () => {
     const navigate = useNavigate();
@@ -35,6 +65,11 @@ const Portfolio = () => {
     const [showFilters, setShowFilters] = useState(false);
     const [sortOrder, setSortOrder] = useState('desc'); // 'desc' or 'asc' by risk
 
+    // Edit Modal State
+    const [isEditOpen, setIsEditOpen] = useState(false);
+    const [editingDebtor, setEditingDebtor] = useState(null);
+    const [saving, setSaving] = useState(false);
+
     useEffect(() => {
         fetchDashboardData();
     }, []);
@@ -42,29 +77,20 @@ const Portfolio = () => {
     const fetchDashboardData = async () => {
         setLoading(true);
         try {
-            const session = await supabase.auth.getSession();
-            const token = session.data.session?.access_token;
+            const data = await getDashboardData();
 
-            const headers = {
-                'Content-Type': 'application/json',
-                'Authorization': token ? `Bearer ${token}` : ''
-            };
+            setDebtors(data.items || []);
+            setOriginalDebtors(data.items || []);
+            setKpis(data.kpis || { total: "$0", critical: "$0", recovered: "$0", effectiveness: "0%" });
 
-            const response = await fetch(`${API_URL}/api/dashboard`, { headers });
-            if (!response.ok) throw new Error('Failed to fetch data');
-            const data = await response.json();
-
-            setDebtors(data.items);
-            setOriginalDebtors(data.items);
-            setKpis(data.kpis);
-
-            if (data.items.length > 0) {
+            if (data.items && data.items.length > 0) {
                 setSelectedDebtor(data.items[0]);
             }
 
         } catch (error) {
             console.error("Error fetching portfolio data:", error);
-            // Fallback or Alert?
+            // Fallback handled by api.js, but if critical error occurs:
+            setDebtors([]);
         } finally {
             setLoading(false);
         }
@@ -143,6 +169,13 @@ const Portfolio = () => {
                     <button className="relative p-2 hover:bg-white/5 rounded-lg transition-colors text-gray-400 hover:text-white">
                         <Bell size={20} />
                         <span className="absolute top-2 right-2 size-2 bg-red-500 rounded-full border border-[#0f1115]"></span>
+                    </button>
+                    <button
+                        onClick={() => navigate('/clients')}
+                        className="p-2 hover:bg-white/5 rounded-lg transition-colors text-gray-400 hover:text-white"
+                        title="Ir a Clientes"
+                    >
+                        <Edit2 size={20} />
                     </button>
                     <button className="p-2 hover:bg-white/5 rounded-lg transition-colors text-gray-400 hover:text-white">
                         <div className="size-6 rounded-full bg-blue-600 flex items-center justify-center text-[10px] font-bold">?</div>
@@ -252,6 +285,7 @@ const Portfolio = () => {
                                             <th className="px-5 py-4">Deuda Vencida</th>
                                             <th className="px-5 py-4">Riesgo</th>
                                             <th className="px-5 py-4 text-right">Último Contacto</th>
+                                            <th className="px-5 py-4 text-center">Acciones</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-white/5">
@@ -296,6 +330,19 @@ const Portfolio = () => {
                                                 <td className="px-5 py-4 text-right">
                                                     <div className="text-xs font-medium text-white">{debtor.crm.date}</div>
                                                     <div className="text-[10px] text-gray-500 truncate max-w-[150px] ml-auto">{debtor.crm.lastNote}</div>
+                                                </td>
+                                                <td className="px-5 py-4 text-center">
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setEditingDebtor(debtor);
+                                                            setIsEditOpen(true);
+                                                        }}
+                                                        className="p-1.5 hover:bg-white/10 text-gray-400 hover:text-white rounded transition-colors"
+                                                        title="Editar detalles"
+                                                    >
+                                                        <Edit2 size={16} />
+                                                    </button>
                                                 </td>
                                             </tr>
                                         ))}
@@ -400,26 +447,60 @@ const Portfolio = () => {
                     </aside>
                 )}
             </div>
+
+            {/* EDIT MODAL PORTAL */}
+            {isEditOpen && editingDebtor && (
+                <EditDebtorModal
+                    debtor={editingDebtor}
+                    onClose={() => setIsEditOpen(false)}
+                    onSave={async (updatedData) => {
+                        setSaving(true);
+                        try {
+                            // Use UUID from the form data if available, otherwise try to fetch it
+                            let uuidToUpdate = updatedData.uuid;
+
+                            if (!uuidToUpdate) {
+                                // Fallback: Find UUID using ID if for some reason it wasn't in the form data
+                                const { data: clientRecord } = await supabase
+                                    .from('clientes_maestra')
+                                    .select('uuid')
+                                    .eq('id_cliente', editingDebtor.id)
+                                    .single();
+
+                                if (clientRecord) {
+                                    uuidToUpdate = clientRecord.uuid;
+                                }
+                            }
+
+                            if (!uuidToUpdate) {
+                                alert("No se pudo encontrar el identificador único (UUID) para actualizar el registro.");
+                                setSaving(false);
+                                return;
+                            }
+
+                            const { error } = await supabase
+                                .from('clientes_maestra')
+                                .update(updatedData)
+                                .eq('uuid', uuidToUpdate);
+
+                            if (error) throw error;
+
+                            // Construct updated list locally to reflect change instantly
+                            setDebtors(prev => prev.map(d => d.id === editingDebtor.id ? { ...d, ...updatedData, risk: updatedData.status_riesgo || d.risk } : d));
+                            setIsEditOpen(false);
+                            alert("Cliente actualizado correctamente");
+
+                        } catch (err) {
+                            console.error("Update failed", err);
+                            alert("Error al actualizar: " + err.message);
+                        } finally {
+                            setSaving(false);
+                        }
+                    }}
+                />
+            )}
         </div>
     );
 };
-
-const StatCard = ({ label, value, trend, trendType, icon, color }) => (
-    <div className="bg-[#1a1d24] p-4 rounded-xl border border-white/5 relative overflow-hidden group hover:border-white/10 transition-colors">
-        <div className="flex justify-between items-start mb-2">
-            <div className={`p-2 rounded-lg ${color}`}>
-                {icon}
-            </div>
-            {/* Removed trend for now since we don't calculate it dynamically yet, or keep static placeholder */}
-            <span className={`flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded font-bold ${trendType === 'up' ? 'text-emerald-500 bg-emerald-500/10' : 'text-amber-500 bg-amber-500/10'}`}>
-                {trendType === 'up' ? <TrendingUp size={12} /> : <TrendingDown size={12} />} {trend}
-            </span>
-        </div>
-        <div>
-            <div className="text-2xl font-bold text-white mb-0.5">{value}</div>
-            <div className="text-xs text-gray-500 font-medium">{label}</div>
-        </div>
-    </div>
-);
 
 export default Portfolio;

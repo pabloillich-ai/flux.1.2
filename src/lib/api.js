@@ -117,7 +117,9 @@ async function fetchFallbackData() {
             amount: inv.saldo_pendiente,
             currency: inv.moneda,
             dueDate: inv.fecha_vencimiento,
-            issueDate: inv.fecha_emision
+            issueDate: inv.fecha_emision,
+            comment: inv.Comentario,
+            alertExcluded: inv.Alet_exclud
         }));
 
         // Join CRM
@@ -149,7 +151,9 @@ async function fetchFallbackData() {
                 date: latestCrm.fecha_y_hora ? new Date(latestCrm.fecha_y_hora).toLocaleDateString() : '-'
             },
             status: status,
-            promiseDate: latestCrm.fecha_promesa_pago
+            promiseDate: latestCrm.fecha_promesa_pago,
+            overdue: overdue,
+            totalDebt: overdue + upcoming,
         };
     });
 
@@ -166,3 +170,114 @@ async function fetchFallbackData() {
         source: 'fallback'
     };
 }
+
+
+// === QUEUE & CONTEXT FALLBACKS ===
+
+export const getQueueData = async (filters = {}) => {
+    try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 2000);
+        const session = await supabase.auth.getSession();
+        const token = session?.data?.session?.access_token;
+
+        const params = new URLSearchParams({
+            min_debt: filters.minDebt || 0,
+            aging_bucket: filters.agingBucket || 'all',
+            risk_level: filters.riskLevel || 'all'
+        });
+
+        const res = await fetch(`${API_URL}/api/queue?${params.toString()}`, {
+            signal: controller.signal,
+            headers: { 'Authorization': token ? `Bearer ${token}` : '' }
+        });
+        clearTimeout(timeoutId);
+
+        if (res.ok) return await res.json();
+    } catch (e) {
+        console.warn("Backend Queue unavailable, using fallback");
+    }
+
+    // Fallback: Get all data and filter/sort
+    // We reuse getDashboardData to leverage its fallback logic if needed
+    const { items, exchangeRate } = await getDashboardData();
+
+    let queue = items.map(item => {
+        // Calculate Debt
+        let totalDebt = 0;
+        let maxDaysOverdue = 0;
+
+        item.invoices.forEach(inv => {
+            const amount = inv.currency === 'USD' ? inv.amount * exchangeRate : inv.amount;
+            totalDebt += amount;
+
+            const due = new Date(inv.dueDate);
+            const today = new Date();
+            const diffTime = Math.abs(today - due);
+            const diffDays = today > due ? Math.ceil(diffTime / (1000 * 60 * 60 * 24)) : 0;
+            if (diffDays > maxDaysOverdue) maxDaysOverdue = diffDays;
+        });
+
+        // Determine Bucket (Mapping Frontend Logic)
+        let bucket = 'Regular';
+        if (item.risk === 'Incobrable' || item.risk === 'Legal' || maxDaysOverdue > 90) bucket = 'Urgente';
+        else if (item.risk === 'Mal Pagador' || maxDaysOverdue > 30) bucket = 'Seguimiento';
+
+        // Calculate Score (Simple Mock)
+        const priorityScore = Math.floor(totalDebt / 1000) + (maxDaysOverdue * 10);
+
+        return {
+            id: item.id,
+            name: item.name,
+            totalDebt,
+            daysOverdue: maxDaysOverdue,
+            risk: item.risk,
+            bucket,
+            priorityScore,
+            overdue: item.overdue
+        };
+    });
+
+    // Apply Filters
+    if (filters.minDebt) queue = queue.filter(q => q.totalDebt >= filters.minDebt);
+    if (filters.agingBucket && filters.agingBucket !== 'all') {
+        if (filters.agingBucket === '+90') queue = queue.filter(q => q.daysOverdue >= 90);
+        else if (filters.agingBucket === '1-30') queue = queue.filter(q => q.daysOverdue >= 1 && q.daysOverdue <= 30);
+    }
+    if (filters.riskLevel && filters.riskLevel !== 'all') {
+        queue = queue.filter(q => q.risk === filters.riskLevel || (filters.riskLevel === 'Crítico' && (q.risk === 'Legal' || q.risk === 'Incobrable')));
+    }
+
+    // Sort by Score
+    queue.sort((a, b) => b.priorityScore - a.priorityScore);
+
+    return queue;
+};
+
+export const getStatsData = async () => {
+    try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 2000);
+        const session = await supabase.auth.getSession();
+        const token = session?.data?.session?.access_token;
+
+        const res = await fetch(`${API_URL}/api/dashboard/stats`, {
+            signal: controller.signal,
+            headers: { 'Authorization': token ? `Bearer ${token}` : '' }
+        });
+        clearTimeout(timeoutId);
+        if (res.ok) return await res.json();
+    } catch (e) {
+        console.warn("Backend Stats unavailable, using fallback");
+    }
+
+    // Fallback Mock Stats
+    return {
+        cashFlow: 15400,
+        cashFlowClients: [{ name: 'Cliente A' }, { name: 'Cliente B' }],
+        operationalVolume: 24,
+        commitmentsToday: 5,
+        commitmentsCompleted: 2,
+        criticalRisk: 12
+    };
+};

@@ -9,9 +9,9 @@ export function Landing() {
             <nav className="flex items-center justify-between px-8 py-6 max-w-7xl mx-auto">
                 <div className="flex items-center gap-2 font-bold text-2xl tracking-tight">
                     <div className="w-8 h-8 flex items-center justify-center">
-                        <img src="/logo_pulse.png" alt="Conect Pulse" className="w-full h-full object-contain" />
+                        <img src="/FLUXLOGO.png" alt="FLUX Logo" className="w-full h-full object-contain" />
                     </div>
-                    <span><strong>CONECT</strong> Pulse</span>
+                    <span><strong>FLUX</strong> Technologies</span>
                 </div>
                 <div className="hidden md:flex gap-8 text-sm font-medium text-slate-600">
                     <a href="#features" className="hover:text-blue-600 transition">Características</a>
@@ -153,7 +153,7 @@ export function Landing() {
             </section>
 
             <footer className="bg-white border-t border-slate-200 py-12 text-center text-slate-500 text-sm">
-                <p>&copy; 2025 CONECT Pulse. Todos los derechos reservados.</p>
+                <p>&copy; 2025 FLUX Technologies. Todos los derechos reservados.</p>
             </footer>
         </div>
     );

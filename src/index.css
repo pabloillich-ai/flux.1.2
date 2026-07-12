@@ -7,3 +7,175 @@
     @apply bg-background text-text-main font-sans antialiased;
   }
 }
+
+/* === FLUX Landing Page Styles === */
+
+:root {
+  color-scheme: dark;
+}
+
+/* === FLUX LOGO ANIMATIONS === */
+
+@keyframes flux-pulse-glow {
+  0%, 100% {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.95;
+    transform: scale(1.08);
+  }
+}
+
+@keyframes flux-rotate-ring {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+@keyframes flux-rotate-ring-reverse {
+  from { transform: rotate(360deg); }
+  to   { transform: rotate(0deg); }
+}
+
+@keyframes flux-scan-line {
+  0%   { transform: translateY(-100%); opacity: 0; }
+  10%  { opacity: 1; }
+  90%  { opacity: 1; }
+  100% { transform: translateY(120%); opacity: 0; }
+}
+
+@keyframes flux-border-shimmer {
+  0%   { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
+}
+
+@keyframes flux-float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-3px); }
+}
+
+@keyframes flux-logo-pulse {
+  0%, 100% { filter: drop-shadow(0 0 8px rgba(16,185,129,0.3)); }
+  50%      { filter: drop-shadow(0 0 18px rgba(16,185,129,0.7)); }
+}
+
+.flux-logo-wrap {
+  position: relative;
+  display: inline-block;
+  animation: flux-float 5s ease-in-out infinite;
+}
+
+.flux-logo-wrap .flux-pulse {
+  animation: flux-pulse-glow 3s ease-in-out infinite;
+}
+
+.flux-logo-wrap .flux-img {
+  animation: flux-logo-pulse 3s ease-in-out infinite;
+  position: relative;
+  z-index: 3;
+}
+
+.flux-logo-wrap .flux-scan {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+  overflow: hidden;
+  border-radius: 0.75rem;
+}
+
+.flux-logo-wrap .flux-scan::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(16,185,129,0) 10%,
+    rgba(16,185,129,0.9) 50%,
+    rgba(16,185,129,0) 90%,
+    transparent 100%
+  );
+  box-shadow: 0 0 12px rgba(16,185,129,0.8);
+  animation: flux-scan-line 3.5s ease-in-out infinite;
+}
+
+.flux-logo-wrap .flux-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1px solid transparent;
+  pointer-events: none;
+}
+
+.flux-logo-wrap .flux-ring-outer {
+  border-top-color: rgba(16,185,129,0.5);
+  border-right-color: rgba(16,185,129,0.15);
+  animation: flux-rotate-ring 8s linear infinite;
+}
+
+.flux-logo-wrap .flux-ring-inner {
+  inset: 8px;
+  border-bottom-color: rgba(59,130,246,0.45);
+  border-left-color: rgba(59,130,246,0.15);
+  animation: flux-rotate-ring-reverse 5s linear infinite;
+}
+
+.flux-logo-wrap .flux-border-shimmer {
+  position: absolute;
+  inset: 0;
+  border-radius: 0.75rem;
+  padding: 1px;
+  background: linear-gradient(
+    90deg,
+    rgba(16,185,129,0.4) 0%,
+    rgba(59,130,246,0.5) 25%,
+    rgba(16,185,129,0.4) 50%,
+    rgba(59,130,246,0.5) 75%,
+    rgba(16,185,129,0.4) 100%
+  );
+  background-size: 200% 100%;
+  animation: flux-border-shimmer 4s linear infinite;
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.flux-header-logo {
+  position: relative;
+  transition: transform 0.3s ease;
+}
+
+.flux-header-logo:hover {
+  transform: scale(1.08) rotate(-3deg);
+}
+
+.flux-header-logo .flux-header-glow {
+  position: absolute;
+  inset: 0;
+  border-radius: 0.5rem;
+  background: radial-gradient(circle, rgba(16,185,129,0.5) 0%, transparent 70%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  filter: blur(6px);
+}
+
+.flux-header-logo:hover .flux-header-glow {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flux-logo-wrap,
+  .flux-logo-wrap *,
+  .flux-header-logo,
+  .flux-header-logo * {
+    animation: none !important;
+    transition: none !important;
+  }
+}

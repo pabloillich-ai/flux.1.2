@@ -35,9 +35,12 @@ export default function Login() {
                 <div className="relative z-10">
                     <div className="flex items-center gap-3 mb-8">
                         <div className="w-10 h-10">
-                            <img src="/logo_pulse.png" alt="Conect Pulse" className="w-full h-full object-contain" />
+                            <img src="/FLUXLOGO.png" alt="FLUX Logo" className="w-full h-full object-contain" />
                         </div>
-                        <span className="text-2xl font-bold tracking-tight">CONECT Pulse</span>
+                        <div className="flex flex-col leading-none">
+                            <span className="text-2xl font-bold tracking-tight">FLUX</span>
+                            <span className="text-[10px] uppercase tracking-[0.2em] text-emerald-400 font-bold">Technologies</span>
+                        </div>
                     </div>
                 </div>
 
@@ -51,7 +54,7 @@ export default function Login() {
                 </div>
 
                 <div className="relative z-10 text-xs text-slate-500 font-medium">
-                    &copy; {new Date().getFullYear()} Conect Pulse &bull; Privacidad &bull; Términos
+                    &copy; {new Date().getFullYear()} FLUX Technologies &bull; Privacidad &bull; Términos
                 </div>
             </div>
 
@@ -80,7 +83,7 @@ export default function Login() {
                                     type="email"
                                     required
                                     className="w-full h-12 pl-10 pr-4 bg-slate-900 border border-slate-800 rounded-lg text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all"
-                                    placeholder="agente@conectpulse.com"
+                                    placeholder="agente@flux.uy"
                                     value={email}
                                     onChange={(e) => setEmail(e.target.value)}
                                 />

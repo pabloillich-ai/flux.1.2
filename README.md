@@ -45,6 +45,7 @@ This project is optimized for deployment on Vercel.
     - `VITE_API_URL`: `https://backend-g6uy.onrender.com`
     - `VITE_SUPABASE_URL`: (Your Supabase URL)
     - `VITE_SUPABASE_ANON_KEY`: (Your Supabase Key)
+5.  **CORS Configuration**: Ensure your Backend (Render) allows requests from your Vercel domain.
 
 ## 📁 Project Structure
 - `src/services`: API handlers and business logic.
