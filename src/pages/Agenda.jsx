@@ -238,23 +238,22 @@ export default function Agenda() {
 
     // Fetch Data
     useEffect(() => {
-        fetchEvents();
-        fetchClients();
-    }, []);
+        if (profile?.tenant_id) {
+            fetchEvents();
+            fetchClients();
+        } else {
+            setLoading(false);
+        }
+    }, [profile]);
 
     async function fetchEvents() {
+        if (!profile?.tenant_id) return;
         setLoading(true);
-        let query = supabase
+        const { data, error } = await supabase
             .from('agenda_events')
-            .select('*');
-
-        if (profile?.tenant_id) {
-            query = query.eq('tenant_id', profile.tenant_id);
-        }
-
-        query = query.order('time', { ascending: true });
-
-        const { data, error } = await query;
+            .select('*')
+            .eq('tenant_id', profile.tenant_id)
+            .order('time', { ascending: true }); // Supabase sort
 
         if (error) {
             console.error('Error fetching events:', error);
@@ -265,18 +264,13 @@ export default function Agenda() {
     }
 
     async function fetchClients() {
+        if (!profile?.tenant_id) return;
         // Fetch from clientes_maestra now
-        let query = supabase
+        const { data, error } = await supabase
             .from('clientes_maestra')
-            .select('uuid, razon_social');
-
-        if (profile?.tenant_id) {
-            query = query.eq('tenant_id', profile.tenant_id);
-        }
-
-        query = query.order('razon_social', { ascending: true });
-
-        const { data, error } = await query;
+            .select('uuid, razon_social')
+            .eq('tenant_id', profile.tenant_id)
+            .order('razon_social', { ascending: true });
 
         if (error) {
             console.error('Error fetching clients:', error);
@@ -317,7 +311,7 @@ export default function Agenda() {
             note: eventData.note,
             agent: eventData.agent || 'Admin User',
             uuid_Client: uuidClient, // Case sensitive column name in DB
-            tenant_id: profile?.tenant_id || null
+            tenant_id: profile?.tenant_id
         };
 
         if (editingEvent) {
