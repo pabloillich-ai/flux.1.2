@@ -20,6 +20,7 @@ import {
 import clsx from 'clsx';
 import MiniCalendar from "../components/MiniCalendar";
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../context/AuthContext';
 
 const ACTION_ICONS = {
     call: Phone,
@@ -226,6 +227,7 @@ function EventModal({ isOpen, onClose, onSave, event = null, clients = [], allEv
 }
 
 export default function Agenda() {
+    const { profile } = useAuth();
     const [events, setEvents] = useState([]);
     const [clients, setClients] = useState([]); // Client list
     const [loading, setLoading] = useState(true);
@@ -242,10 +244,17 @@ export default function Agenda() {
 
     async function fetchEvents() {
         setLoading(true);
-        const { data, error } = await supabase
+        let query = supabase
             .from('agenda_events')
-            .select('*')
-            .order('time', { ascending: true }); // Supabase sort
+            .select('*');
+
+        if (profile?.tenant_id) {
+            query = query.eq('tenant_id', profile.tenant_id);
+        }
+
+        query = query.order('time', { ascending: true });
+
+        const { data, error } = await query;
 
         if (error) {
             console.error('Error fetching events:', error);
@@ -257,10 +266,17 @@ export default function Agenda() {
 
     async function fetchClients() {
         // Fetch from clientes_maestra now
-        const { data, error } = await supabase
+        let query = supabase
             .from('clientes_maestra')
-            .select('uuid, razon_social')
-            .order('razon_social', { ascending: true });
+            .select('uuid, razon_social');
+
+        if (profile?.tenant_id) {
+            query = query.eq('tenant_id', profile.tenant_id);
+        }
+
+        query = query.order('razon_social', { ascending: true });
+
+        const { data, error } = await query;
 
         if (error) {
             console.error('Error fetching clients:', error);
@@ -300,7 +316,8 @@ export default function Agenda() {
             type: eventData.type,
             note: eventData.note,
             agent: eventData.agent || 'Admin User',
-            uuid_Client: uuidClient // Case sensitive column name in DB
+            uuid_Client: uuidClient, // Case sensitive column name in DB
+            tenant_id: profile?.tenant_id || null
         };
 
         if (editingEvent) {
