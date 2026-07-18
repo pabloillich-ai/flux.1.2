@@ -27,6 +27,7 @@ import RexLanding from './pages/RexLanding';
 import CollectionWorkflows from './pages/CollectionWorkflows';
 import ContextAndRole from './pages/ContextAndRole';
 import ReportedPayments from './pages/ReportedPayments';
+import Auditoria from './pages/Auditoria';
 
 function App() {
   return (
@@ -61,6 +62,7 @@ function App() {
             <Route path="import" element={<DataImportWizard />} />
             <Route path="gestion-cartera" element={<GestionCartera />} />
             <Route path="reported-payments" element={<ReportedPayments />} />
+            <Route path="auditoria" element={<Auditoria />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />

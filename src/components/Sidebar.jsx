@@ -13,7 +13,8 @@ import {
     Workflow,
     Zap,
     FolderOpen,
-    MessageSquare
+    MessageSquare,
+    ShieldCheck
 } from 'lucide-react';
 import clsx from 'clsx';
 
@@ -38,6 +39,7 @@ const navItems = [
     { icon: Workflow, label: 'Automatización', path: '/workflows' },
     { icon: Bell, label: 'Alertas', path: '/alerts' },
     { icon: Database, label: 'Mapeo', path: '/import' },
+    { icon: ShieldCheck, label: 'Auditoría', path: '/auditoria' },
 ];
 
 export function Sidebar({ isOpen, toggle }) {
