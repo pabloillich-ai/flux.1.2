@@ -265,144 +265,71 @@ export default function RexLanding() {
         </div>
       </header>
 
-      {/* HERO SECTION */}
-      <section className="relative pt-12 pb-24 md:py-32 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8 items-center">
-            
-            {/* Hero Left Content */}
-            <div className="lg:col-span-7 space-y-8 text-center lg:text-left">
+      {/* HERO SECTION — Full screen, centered, clean first impression */}
+      <section className="relative min-h-screen flex items-center justify-center px-4 sm:px-6 lg:px-8">
+        <div className="max-w-4xl mx-auto text-center space-y-8 py-20">
 
-              {/* Logo destacado */}
-              <div className="flex justify-center lg:justify-start">
-                <div className="flux-logo-wrap">
-                  {/* Glow exterior pulsante */}
-                  <div className="absolute inset-0 bg-[#10B981]/40 blur-2xl rounded-full flux-pulse" />
-
-                  {/* Anillo exterior orbital */}
-                  <div className="flux-ring flux-ring-outer" />
-
-                  {/* Anillo interior orbital */}
-                  <div className="flux-ring flux-ring-inner" />
-
-                  {/* Contenedor del logo */}
-                  <div className="relative bg-gradient-to-br from-[#111A2E]/80 to-[#060B13]/80 backdrop-blur-sm rounded-2xl p-4 shadow-[0_0_40px_rgba(16,185,129,0.25)]">
-                    {/* Borde shimmer */}
-                    <div className="flux-border-shimmer" />
-
-                    {/* Scan line */}
-                    <div className="flux-scan" />
-
-                    <img
-                      src="/FLUXLOGO.png"
-                      alt="FLUX Logo"
-                      className="flux-img h-16 md:h-20 w-auto object-contain"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-xs md:text-sm font-medium text-gray-300 backdrop-blur-sm">
-                <span className="flex h-2 w-2 rounded-full bg-[#10B981] animate-pulse" />
-                <span>La revolución de la cobranza B2B interactiva</span>
-              </div>
-
-              <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tight leading-[1.1] text-white">
-                Tu tiempo y tu capital, <br className="hidden sm:inline" />
-                <span className="bg-gradient-to-r from-[#10B981] via-[#34D399] to-[#3B82F6] bg-clip-text text-transparent">
-                  fluyendo a tu favor.
-                </span>
-              </h1>
-
-              <p className="text-lg md:text-xl text-gray-400 font-light max-w-2xl mx-auto lg:mx-0 leading-relaxed">
-                En <strong className="text-white font-medium">FLUX</strong> destrabamos el flujo de caja y la comunicación de tu empresa mediante la automatización inteligente del ciclo de cobranzas B2B. Eliminamos la fricción operativa para que tu negocio crezca sin interrupciones.
-              </p>
-
-              <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4 pt-4">
-                <a 
-                  href="#demo" 
-                  className="w-full sm:w-auto text-center bg-gradient-to-r from-[#10B981] to-[#3B82F6] hover:from-[#34D399] hover:to-[#60A5FA] text-black font-bold text-base px-8 py-4 rounded-xl shadow-xl shadow-[#10B981]/15 transition-all hover:scale-105"
-                >
-                  Mejorar Mi Flujo de Caja
-                </a>
-                <a 
-                  href="#simulator" 
-                  className="w-full sm:w-auto text-center bg-[#1E293B]/70 hover:bg-[#1E293B] border border-white/10 text-white font-semibold text-base px-8 py-4 rounded-xl transition-all flex items-center justify-center gap-2 hover:border-white/25"
-                >
-                  <Play className="w-5 h-5 text-[#10B981] fill-current" />
-                  <span>Explorar Simulador</span>
-                </a>
-              </div>
-
-              <div className="pt-8 border-t border-white/5 space-y-3">
-                <p className="text-xs uppercase tracking-widest text-gray-500 font-bold">Compatible con tus sistemas actuales</p>
-                <div className="flex flex-wrap items-center justify-center lg:justify-start gap-6 opacity-60 hover:opacity-90 transition-opacity">
-                  <span className="text-sm font-semibold tracking-wider text-gray-300">SAP ERP</span>
-                  <span className="text-sm font-semibold tracking-wider text-gray-300">ORACLE Cloud</span>
-                  <span className="text-sm font-semibold tracking-wider text-gray-300">MICROSOFT Dynamics</span>
-                  <span className="text-sm font-semibold tracking-wider text-gray-300">QUICKBOOKS Enterprise</span>
-                  <span className="text-sm font-semibold tracking-wider text-gray-300">LOCAL APIs</span>
-                </div>
-              </div>
-
-            </div>
-
-            {/* Hero Right Visuals */}
-            <div className="lg:col-span-5 relative mt-10 lg:mt-0">
-              <div className="relative mx-auto max-w-[440px] lg:max-w-none bg-gradient-to-b from-[#111A2E] to-[#080E1A] p-6 rounded-3xl border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.5)]">
-                
-                <div className="flex items-center justify-between mb-6 pb-4 border-b border-white/5">
-                  <div className="flex items-center gap-2">
-                    <span className="w-3 h-3 rounded-full bg-[#10B981] animate-pulse" />
-                    <span className="text-xs uppercase tracking-wider text-gray-400 font-bold">FLUX Live Engine Status</span>
-                  </div>
-                  <span className="text-xs text-[#10B981] bg-[#10B981]/10 px-2.5 py-0.5 rounded-full font-semibold">Online</span>
-                </div>
-
-                <div className="relative flex flex-col items-center justify-center py-6 bg-[#0B1220] rounded-2xl border border-white/5 mb-6 overflow-hidden group">
-                  <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                  <p className="text-sm text-gray-400">Reducción Promedio de DSO</p>
-                  <p className="text-6xl font-black text-white tracking-tighter my-2 bg-gradient-to-r from-white to-[#10B981] bg-clip-text text-transparent">
-                    -35%
-                  </p>
-                  <p className="text-xs text-[#10B981] font-medium flex items-center gap-1">
-                    <TrendingUp className="w-3.5 h-3.5" />
-                    <span>Ciclo de cobro optimizado</span>
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-[#0B1220] p-4 rounded-xl border border-white/5">
-                    <span className="text-xs text-gray-400 block mb-1">Efectividad Mensajes</span>
-                    <span className="text-xl font-bold text-white block">94.2%</span>
-                    <div className="w-full bg-white/5 h-1.5 rounded-full mt-2 overflow-hidden">
-                      <div className="bg-gradient-to-r from-[#10B981] to-[#34D399] h-full w-[94%]" />
-                    </div>
-                  </div>
-                  <div className="bg-[#0B1220] p-4 rounded-xl border border-white/5">
-                    <span className="text-xs text-gray-400 block mb-1">Capital Liberado</span>
-                    <span className="text-xl font-bold text-white block">$24.8M USD</span>
-                    <span className="text-[10px] text-gray-500 block mt-2">Retorno de caja natural</span>
-                  </div>
-                </div>
-
-                <div className="mt-4 bg-[#1E293B]/40 p-3.5 rounded-xl border border-white/5 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="p-1.5 bg-[#10B981]/15 rounded-lg text-[#10B981]">
-                      <Zap className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <p className="text-xs font-semibold text-white">SAP Sincronizado</p>
-                      <p className="text-[10px] text-gray-400">Hace 4 segundos</p>
-                    </div>
-                  </div>
-                  <span className="text-xs font-bold text-white bg-white/5 px-2.5 py-1 rounded-md">240 Acciones/min</span>
-                </div>
-
+          {/* Logo destacado */}
+          <div className="flex justify-center">
+            <div className="flux-logo-wrap">
+              <div className="absolute inset-0 bg-[#10B981]/40 blur-2xl rounded-full flux-pulse" />
+              <div className="flux-ring flux-ring-outer" />
+              <div className="flux-ring flux-ring-inner" />
+              <div className="relative bg-gradient-to-br from-[#111A2E]/80 to-[#060B13]/80 backdrop-blur-sm rounded-2xl p-4 shadow-[0_0_40px_rgba(16,185,129,0.25)]">
+                <div className="flux-border-shimmer" />
+                <div className="flux-scan" />
+                <img
+                  src="/FLUXLOGO.png"
+                  alt="FLUX Logo"
+                  className="flux-img h-16 md:h-20 w-auto object-contain"
+                />
               </div>
             </div>
-
           </div>
+
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-xs md:text-sm font-medium text-gray-300 backdrop-blur-sm">
+            <span className="flex h-2 w-2 rounded-full bg-[#10B981] animate-pulse" />
+            <span>La revolución de la cobranza B2B interactiva</span>
+          </div>
+
+          <h1 className="text-4xl sm:text-5xl md:text-7xl font-extrabold tracking-tight leading-[1.1] text-white">
+            Tu tiempo y tu capital, <br />
+            <span className="bg-gradient-to-r from-[#10B981] via-[#34D399] to-[#3B82F6] bg-clip-text text-transparent">
+              fluyendo a tu favor.
+            </span>
+          </h1>
+
+          <p className="text-xl md:text-2xl text-gray-400 font-light max-w-3xl mx-auto leading-relaxed">
+            En <strong className="text-white font-medium">FLUX</strong> destrabamos el flujo de caja y la comunicación de tu empresa mediante la automatización de cobranzas. Lo hacemos porque sabemos que un proceso estancado frena el crecimiento y genera estrés operativo, y nuestro objetivo final es devolverte el tiempo, la eficiencia y la tranquilidad financiera que necesitas para escalar tu negocio sin fricciones.
+          </p>
+
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
+            <a
+              href="#demo"
+              className="w-full sm:w-auto text-center bg-gradient-to-r from-[#10B981] to-[#3B82F6] hover:from-[#34D399] hover:to-[#60A5FA] text-black font-bold text-base px-8 py-4 rounded-xl shadow-xl shadow-[#10B981]/15 transition-all hover:scale-105"
+            >
+              Mejorar Mi Flujo de Caja
+            </a>
+            <a
+              href="#simulator"
+              className="w-full sm:w-auto text-center bg-[#1E293B]/70 hover:bg-[#1E293B] border border-white/10 text-white font-semibold text-base px-8 py-4 rounded-xl transition-all flex items-center justify-center gap-2 hover:border-white/25"
+            >
+              <Play className="w-5 h-5 text-[#10B981] fill-current" />
+              <span>Explorar Simulador</span>
+            </a>
+          </div>
+
+          <div className="pt-8 border-t border-white/5 space-y-3">
+            <p className="text-xs uppercase tracking-widest text-gray-500 font-bold">Compatible con tus sistemas actuales</p>
+            <div className="flex flex-wrap items-center justify-center gap-6 opacity-60 hover:opacity-90 transition-opacity">
+              <span className="text-sm font-semibold tracking-wider text-gray-300">SAP ERP</span>
+              <span className="text-sm font-semibold tracking-wider text-gray-300">ORACLE Cloud</span>
+              <span className="text-sm font-semibold tracking-wider text-gray-300">MICROSOFT Dynamics</span>
+              <span className="text-sm font-semibold tracking-wider text-gray-300">QUICKBOOKS Enterprise</span>
+              <span className="text-sm font-semibold tracking-wider text-gray-300">LOCAL APIs</span>
+            </div>
+          </div>
+
         </div>
       </section>
 
@@ -952,7 +879,7 @@ export default function RexLanding() {
                 {/* DSO Previo */}
                 <div className="space-y-2">
                   <div className="flex justify-between text-xs font-bold uppercase tracking-wider text-gray-400">
-                    <span>DSO Actual (Previo)</span>
+                    <span>Plazo medio de cobro (días)</span>
                     <span className="text-white">{dsoPrevious} días</span>
                   </div>
                   <input
@@ -1302,20 +1229,48 @@ export default function RexLanding() {
           <div className="space-y-4">
             {[
               {
-                q: "¿Es necesario tener conocimientos de programación para integrar FLUX?",
-                a: "No. FLUX cuenta con conectores directos y sin código para los ERPs más populares (SAP S/4HANA, Dynamics, Oracle Cloud y QuickBooks). Nuestro equipo de ingenieros de soporte se encarga de la configuración inicial en menos de 24 horas hábiles sin costo adicional."
+                q: "¿Qué es el software de cobranza FLUX?",
+                a: "Es una plataforma tecnológica integral diseñada para organizar, automatizar y optimizar la gestión de cuentas por cobrar. Su objetivo es recuperar la cartera vencida de forma eficiente, reduciendo costos y tiempos operativos."
               },
               {
-                q: "¿Cómo funciona el envío de mensajes a través de WhatsApp?",
-                a: "Utilizamos la API Oficial de Meta (WhatsApp Business Platform). Esto te garantiza el 100% de entrega, previene bloqueos de números comerciales, permite usar la marca/nombre de tu empresa con insignia de verificación y habilita botones de respuesta rápida para que tus clientes paguen directo desde el chat."
+                q: "¿Cuál es el propósito principal de utilizar este sistema?",
+                a: "Su fin es mejorar el flujo de caja, reducir la morosidad y automatizar tareas repetitivas, permitiendo que el equipo se enfoque en estrategias de recuperación de mayor valor."
               },
               {
-                q: "¿Los datos financieros de mi empresa están seguros con FLUX?",
-                a: "La seguridad es nuestra mayor prioridad. Contamos con cifrado AES-256 para todos los datos almacenados, protocolos TLS de extremo a extremo para las transferencias y cumplimos estrictamente con las normativas internacionales de protección de datos (GDPR y regulaciones financieras locales)."
+                q: "¿Cómo ayuda FLUX a la experiencia del cliente?",
+                a: "FLUX ofrece una comunicación omnicanal (WhatsApp, SMS, email), notificaciones automáticas y un portal de autogestión donde los clientes pueden consultar su deuda, informar pagos o realizar reclamos, mejorando la transparencia y la relación comercial."
               },
               {
-                q: "¿Cuánto tiempo toma ver resultados después de la activación?",
-                a: "La mayoría de nuestros socios corporativos experimentan una reducción del 15% al 20% en su indicador de DSO dentro de los primeros 30 días de uso continuo del motor de automatización preventiva de FLUX."
+                q: "¿Se puede integrar FLUX con otros sistemas?",
+                a: "Sí, FLUX se integra fácilmente con los principales ERP, sistemas contables y Core Bancarios del mercado, permitiendo una sincronización fluida de datos sin necesidad de carga manual."
+              },
+              {
+                q: "¿Qué diferencia a FLUX de un CRM de cobranzas tradicional?",
+                a: "FLUX funciona como un CRM de cobranzas que organiza la gestión en etapas definidas, aplicando estrategias segmentadas por riesgo y comportamiento de cada cliente, además de ofrecer una potente automatización de tareas y canales digitales."
+              },
+              {
+                q: "¿Cómo contribuye FLUX a la reducción de costos?",
+                a: "Al automatizar el envío de recordatorios, la conciliación de pagos y la gestión de procesos, la empresa reduce la carga operativa, disminuye el error humano y minimiza la necesidad de contratar personal adicional o agencias externas."
+              },
+              {
+                q: "¿Qué es la automatización de cobros?",
+                a: "Es el uso de tecnología para gestionar el flujo completo de efectivo: desde la generación y envío de facturas hasta el seguimiento automático de pagos y la confirmación de recibos, eliminando tareas manuales repetitivas."
+              },
+              {
+                q: "¿Cómo sé si mi empresa necesita un software de cobranza?",
+                a: "Si tu equipo dedica demasiado tiempo a tareas manuales (Excel, llamadas repetitivas), si tienes una alta tasa de morosidad, falta de visibilidad en tiempo real sobre el flujo de caja o si el proceso de conciliación es lento, FLUX es la solución ideal."
+              },
+              {
+                q: "¿Es seguro utilizar FLUX para mi gestión financiera?",
+                a: "Sí. FLUX opera con altos estándares de seguridad tecnológica, garantizando la protección de los datos de tus clientes y la integridad de la información financiera, siempre manteniendo la trazabilidad total de cada interacción."
+              },
+              {
+                q: "¿Cuánto tiempo toma implementar FLUX?",
+                a: "Gracias a su capacidad de integración con sistemas ya existentes (ERP, bancos), la implementación de FLUX es ágil y sencilla, permitiendo a tu empresa comenzar a optimizar su gestión de cobros en un tiempo récord."
+              },
+              {
+                q: "¿Puedo medir el rendimiento de mi equipo de cobranzas?",
+                a: "Sí, FLUX brinda informes detallados y tableros en tiempo real sobre la actividad de los agentes, el estado de la morosidad y el rendimiento de las estrategias implementadas, facilitando la toma de decisiones basada en datos."
               }
             ].map((faq, idx) => (
               <div 
