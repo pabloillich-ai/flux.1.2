@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ShieldCheck, Search, X, Eye, ChevronLeft, ChevronRight, Clock, Filter } from 'lucide-react';
 import clsx from 'clsx';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../context/AuthContext';
 
 const TABLE_LABELS = {
     clientes_maestra: 'Clientes',
@@ -162,6 +163,7 @@ function DiffModal({ log, onClose }) {
 }
 
 export default function Auditoria() {
+    const { profile } = useAuth();
     const [logs, setLogs] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
@@ -181,6 +183,7 @@ export default function Auditoria() {
             .order('created_at', { ascending: false })
             .limit(500);
 
+        if (profile?.tenant_id) query = query.eq('tenant_id', profile.tenant_id);
         if (filterTable !== 'all') query = query.eq('table_name', filterTable);
         if (filterAction !== 'all') query = query.eq('action', filterAction);
         if (filterDateFrom) query = query.gte('created_at', filterDateFrom);
